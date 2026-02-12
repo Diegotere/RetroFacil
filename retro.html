@@ -25,7 +25,7 @@
       <section class="panel share-panel">
         <h2>Compartilhar sala</h2>
         <p class="hint">
-          Envie este endereço para colaboradores acessarem esta retrospectiva e adicionarem cartões.
+          Envie este endereço para colaboradores acessarem esta retrospectiva e adicionarem cartões anonimamente.
         </p>
         <div class="share-row">
           <input id="shareUrl" type="text" readonly />
@@ -34,11 +34,19 @@
         </div>
       </section>
 
+      <section class="panel share-panel">
+        <h2>Configurar colunas</h2>
+        <p class="hint">Você pode criar, editar e remover colunas deste quadro.</p>
+        <div class="share-row">
+          <input id="newColumnName" type="text" maxlength="30" placeholder="Nome da nova coluna" />
+          <button class="primary" id="addColumn">Adicionar coluna</button>
+        </div>
+      </section>
+
       <section class="board" id="retroBoard">
         <header class="board-header">
           <h2 id="boardTitle">Retrospectiva</h2>
           <div class="board-controls">
-            <input id="participant" type="text" placeholder="Seu nome" maxlength="20" />
             <button class="ghost" id="clearBoard">Limpar quadro</button>
           </div>
         </header>
@@ -53,10 +61,13 @@
     </main>
 
     <template id="columnTemplate">
-      <article class="column">
+      <article class="column" data-column-id="">
         <header>
-          <h3></h3>
-          <button class="ghost small add-card">+ cartão</button>
+          <input class="column-title-input" maxlength="30" />
+          <div class="column-actions">
+            <button class="ghost small add-card">+ cartão</button>
+            <button class="ghost small remove-column">🗑</button>
+          </div>
         </header>
         <ul class="card-list"></ul>
       </article>
@@ -64,9 +75,13 @@
 
     <template id="cardTemplate">
       <li class="card-item">
+        <div class="card-top">
+          <span class="card-number"></span>
+          <button class="ghost small remove-card" title="remover cartão">×</button>
+        </div>
         <p class="card-text"></p>
         <div class="card-footer">
-          <span class="meta"></span>
+          <span class="meta">anônimo</span>
           <button class="vote-btn" title="votar">👍 <span>0</span></button>
         </div>
       </li>

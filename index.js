@@ -78,6 +78,12 @@ function createRetroAndOpen() {
     title,
     date: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    columns: [
+      { id: "col-good", name: "😀 Funcionou bem" },
+      { id: "col-bad", name: "😕 Pode melhorar" },
+      { id: "col-ideas", name: "💡 Ideias" },
+      { id: "col-actions", name: "🚀 Ações" },
+    ],
     cards: [],
   };
 
@@ -107,7 +113,7 @@ function renderRetroList() {
     openLink.textContent = "Abrir sala";
 
     const text = document.createElement("span");
-    text.textContent = `${retro.title} — ${retro.date.slice(0, 10)} (${retro.cards.length} cartões)`;
+    text.textContent = `${retro.title} — ${retro.date.slice(0, 10)} (${(retro.cards || []).length} cartões)`;
 
     li.appendChild(text);
     li.appendChild(openLink);

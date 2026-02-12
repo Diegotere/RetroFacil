@@ -293,6 +293,34 @@ select {
   padding: 0.65rem;
 }
 
+
+.column-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.column-title-input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  font-weight: 600;
+  width: 100%;
+  min-width: 120px;
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.3rem;
+}
+
+.card-number {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+}
+
 .card-text {
   margin: 0;
   font-size: 0.95rem;
