@@ -1,4 +1,5 @@
 const STORAGE_KEY = "retrofacil_data_v3";
+const SESSION_KEY = "retrofacil_session_id";
 const defaultColumns = [
   { id: "col-good", name: "😀 Funcionou bem" },
   { id: "col-bad", name: "😕 Pode melhorar" },
@@ -13,6 +14,7 @@ const teamContext = document.getElementById("teamContext");
 const shareUrlInput = document.getElementById("shareUrl");
 const startVotingBtn = document.getElementById("startVoting");
 const newColumnNameInput = document.getElementById("newColumnName");
+const columnConfigSection = document.getElementById("columnConfigSection");
 
 let votingMode = false;
 let state = loadState();
@@ -20,6 +22,7 @@ const params = new URLSearchParams(window.location.search);
 const teamId = params.get("team");
 const retroId = params.get("retro");
 const room = getRoom();
+const isOwner = room ? room.retro.creatorSessionId === getSessionId() : false;
 
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -39,6 +42,14 @@ function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function getSessionId() {
+  const current = localStorage.getItem(SESSION_KEY);
+  if (current) return current;
+  const created = createId();
+  localStorage.setItem(SESSION_KEY, created);
+  return created;
+}
+
 function getRoom() {
   const team = state.teams.find((item) => item.id === teamId);
   if (!team) return null;
@@ -48,6 +59,10 @@ function getRoom() {
 }
 
 function normalizeRetroModel(retro) {
+  if (!retro.creatorSessionId) {
+    retro.creatorSessionId = getSessionId();
+  }
+
   if (!Array.isArray(retro.columns) || !retro.columns.length) {
     retro.columns = defaultColumns.map((col) => ({ ...col }));
 
@@ -86,7 +101,9 @@ function createBoard() {
 
     const titleInput = column.querySelector(".column-title-input");
     titleInput.value = columnData.name;
+    titleInput.readOnly = !isOwner;
     titleInput.addEventListener("change", () => {
+      if (!isOwner) return;
       const next = titleInput.value.trim();
       titleInput.value = next || columnData.name;
       updateColumnName(columnData.id, titleInput.value);
@@ -107,9 +124,14 @@ function createBoard() {
       saveBoardToRetro();
     });
 
-    column.querySelector(".remove-column").addEventListener("click", () => {
-      removeColumn(columnData.id);
-    });
+    const removeColumnBtn = column.querySelector(".remove-column");
+    if (!isOwner) {
+      removeColumnBtn.style.display = "none";
+    } else {
+      removeColumnBtn.addEventListener("click", () => {
+        removeColumn(columnData.id);
+      });
+    }
 
     columnsContainer.appendChild(column);
   });
@@ -201,6 +223,7 @@ function loadRetroCards() {
 }
 
 function addColumn() {
+  if (!isOwner) return;
   const name = newColumnNameInput.value.trim();
   if (!name) return;
   room.retro.columns.push({ id: createId(), name });
@@ -211,6 +234,7 @@ function addColumn() {
 }
 
 function updateColumnName(columnId, newName) {
+  if (!isOwner) return;
   const column = room.retro.columns.find((item) => item.id === columnId);
   if (!column) return;
   column.name = newName;
@@ -218,6 +242,7 @@ function updateColumnName(columnId, newName) {
 }
 
 function removeColumn(columnId) {
+  if (!isOwner) return;
   if ((room.retro.columns || []).length <= 1) {
     alert("A retro precisa ter ao menos uma coluna.");
     return;
@@ -265,6 +290,10 @@ function setupHeaderAndShare() {
   retroTitleHeading.textContent = room.retro.title;
   teamContext.textContent = `Time: ${room.team.name}`;
   shareUrlInput.value = window.location.href;
+
+  if (!isOwner && columnConfigSection) {
+    columnConfigSection.style.display = "none";
+  }
 }
 
 function setupEvents() {
@@ -278,7 +307,7 @@ function setupEvents() {
   document.getElementById("clearBoard").addEventListener("click", clearBoard);
   document.getElementById("finishRetro").addEventListener("click", () => {
     saveBoardToRetro();
-    alert("Retrospectiva encerrada e salva. Retorne ao painel para ver relatórios.");
+    window.location.href = "index.html";
   });
 
   startVotingBtn.addEventListener("click", () => {

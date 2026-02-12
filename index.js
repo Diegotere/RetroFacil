@@ -1,4 +1,5 @@
 const STORAGE_KEY = "retrofacil_data_v3";
+const SESSION_KEY = "retrofacil_session_id";
 
 const teamNameInput = document.getElementById("teamName");
 const teamSelect = document.getElementById("teamSelect");
@@ -13,6 +14,14 @@ let state = loadState();
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getSessionId() {
+  const current = localStorage.getItem(SESSION_KEY);
+  if (current) return current;
+  const created = createId();
+  localStorage.setItem(SESSION_KEY, created);
+  return created;
 }
 
 function createDefaultTeam() {
@@ -114,6 +123,7 @@ function createRetroAndOpen() {
       { id: "col-actions", name: "🚀 Ações" },
     ],
     cards: [],
+    creatorSessionId: getSessionId(),
   };
 
   team.retros.push(retro);
