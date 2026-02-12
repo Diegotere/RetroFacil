@@ -107,6 +107,16 @@ button.ghost:hover,
   border-color: #cad4ff;
 }
 
+button.ghost.danger {
+  border-color: #ffd8d8;
+  color: #9d1c1c;
+}
+
+button.ghost.danger:hover {
+  border-color: #ffb8b8;
+  background: #fff6f6;
+}
+
 button.small {
   padding: 0.35rem 0.6rem;
   font-size: 0.85rem;
@@ -190,6 +200,12 @@ select {
   justify-content: space-between;
   gap: 0.5rem;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.retro-actions {
+  display: flex;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 

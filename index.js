@@ -15,10 +15,14 @@ function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function createDefaultTeam() {
+  return { id: createId(), name: "Time Padrão", retros: [] };
+}
+
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
-    const team = { id: createId(), name: "Time Padrão", retros: [] };
+    const team = createDefaultTeam();
     return { teams: [team], currentTeamId: team.id };
   }
 
@@ -27,7 +31,7 @@ function loadState() {
     if (!Array.isArray(parsed.teams) || !parsed.teams.length) throw new Error("invalid");
     return parsed;
   } catch {
-    const team = { id: createId(), name: "Time Padrão", retros: [] };
+    const team = createDefaultTeam();
     return { teams: [team], currentTeamId: team.id };
   }
 }
@@ -64,10 +68,35 @@ function createTeam() {
   state.teams.push(team);
   state.currentTeamId = team.id;
   teamNameInput.value = "";
-  persist();
-  renderTeamSelect();
-  renderRetroList();
-  renderReports();
+
+  persistAndRender();
+}
+
+function deleteSelectedTeam() {
+  const team = getCurrentTeam();
+  if (!team) return;
+
+  if ((team.retros || []).length > 0) {
+    const confirmDelete = confirm(
+      `O time '${team.name}' possui retrospectivas cadastradas. Se você continuar, todas as retros deste time serão excluídas. Deseja continuar?`
+    );
+    if (!confirmDelete) return;
+  } else {
+    const confirmDelete = confirm(`Deseja realmente excluir o time '${team.name}'?`);
+    if (!confirmDelete) return;
+  }
+
+  state.teams = state.teams.filter((item) => item.id !== team.id);
+
+  if (!state.teams.length) {
+    const fallback = createDefaultTeam();
+    state.teams = [fallback];
+    state.currentTeamId = fallback.id;
+  } else {
+    state.currentTeamId = state.teams[0].id;
+  }
+
+  persistAndRender();
 }
 
 function createRetroAndOpen() {
@@ -88,11 +117,23 @@ function createRetroAndOpen() {
   };
 
   team.retros.push(retro);
-  persist();
-  renderRetroList();
-  renderReports();
+  persistAndRender();
 
   window.location.href = `retro.html?team=${encodeURIComponent(team.id)}&retro=${encodeURIComponent(retro.id)}`;
+}
+
+function deleteRetro(retroId) {
+  const team = getCurrentTeam();
+  const retro = (team.retros || []).find((item) => item.id === retroId);
+  if (!retro) return;
+
+  const confirmDelete = confirm(
+    `Deseja realmente excluir a retrospectiva '${retro.title}'? Não será possível recuperar.`
+  );
+  if (!confirmDelete) return;
+
+  team.retros = team.retros.filter((item) => item.id !== retroId);
+  persistAndRender();
 }
 
 function renderRetroList() {
@@ -107,16 +148,28 @@ function renderRetroList() {
 
   retros.forEach((retro) => {
     const li = document.createElement("li");
+
+    const text = document.createElement("span");
+    text.textContent = `${retro.title} — ${retro.date.slice(0, 10)} (${(retro.cards || []).length} cartões)`;
+
+    const actions = document.createElement("div");
+    actions.className = "retro-actions";
+
     const openLink = document.createElement("a");
     openLink.className = "link-btn ghost";
     openLink.href = `retro.html?team=${encodeURIComponent(team.id)}&retro=${encodeURIComponent(retro.id)}`;
     openLink.textContent = "Abrir sala";
 
-    const text = document.createElement("span");
-    text.textContent = `${retro.title} — ${retro.date.slice(0, 10)} (${(retro.cards || []).length} cartões)`;
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "ghost danger";
+    deleteButton.textContent = "Excluir retro";
+    deleteButton.addEventListener("click", () => deleteRetro(retro.id));
+
+    actions.appendChild(openLink);
+    actions.appendChild(deleteButton);
 
     li.appendChild(text);
-    li.appendChild(openLink);
+    li.appendChild(actions);
     retroList.appendChild(li);
   });
 }
@@ -176,15 +229,21 @@ function renderReports() {
     : "<li>Sem retrospectivas salvas.</li>";
 }
 
+function persistAndRender() {
+  persist();
+  renderTeamSelect();
+  renderRetroList();
+  renderReports();
+}
+
 function setupEvents() {
   document.getElementById("createTeam").addEventListener("click", createTeam);
+  document.getElementById("deleteTeam").addEventListener("click", deleteSelectedTeam);
   document.getElementById("createRetro").addEventListener("click", createRetroAndOpen);
 
   teamSelect.addEventListener("change", (event) => {
     state.currentTeamId = event.target.value;
-    persist();
-    renderRetroList();
-    renderReports();
+    persistAndRender();
   });
 }
 
