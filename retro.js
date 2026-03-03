@@ -1,4 +1,3 @@
-const STORAGE_KEY = "retrofacil_data_v3";
 const SESSION_KEY = "retrofacil_session_id";
 const defaultColumns = [
   { id: "col-good", name: "😀 Funcionou bem" },
@@ -16,27 +15,12 @@ const startVotingBtn = document.getElementById("startVoting");
 const newColumnNameInput = document.getElementById("newColumnName");
 const columnConfigSection = document.getElementById("columnConfigSection");
 
-let votingMode = false;
-let state = loadState();
 const params = new URLSearchParams(window.location.search);
-const teamId = params.get("team");
 const retroId = params.get("retro");
-const room = getRoom();
-const isOwner = room ? room.retro.creatorSessionId === getSessionId() : false;
 
-function loadState() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return { teams: [], currentTeamId: null };
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return { teams: [], currentTeamId: null };
-  }
-}
-
-function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
+let votingMode = false;
+let room = null;
+let isOwner = false;
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -50,34 +34,19 @@ function getSessionId() {
   return created;
 }
 
-function getRoom() {
-  const team = state.teams.find((item) => item.id === teamId);
-  if (!team) return null;
-  const retro = (team.retros || []).find((item) => item.id === retroId);
-  if (!retro) return null;
-  return { team, retro };
-}
+async function api(path, options = {}) {
+  const response = await fetch(`/api${path}`, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
 
-function normalizeRetroModel(retro) {
-  if (!retro.creatorSessionId) {
-    retro.creatorSessionId = getSessionId();
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || "Falha na requisição");
   }
 
-  if (!Array.isArray(retro.columns) || !retro.columns.length) {
-    retro.columns = defaultColumns.map((col) => ({ ...col }));
-
-    if (Array.isArray(retro.cards)) {
-      retro.cards = retro.cards.map((card) => {
-        const fallback = retro.columns[0]?.id;
-        const byName = retro.columns.find((col) => col.name === card.column);
-        return {
-          ...card,
-          columnId: card.columnId || byName?.id || fallback,
-          author: "anônimo",
-        };
-      });
-    }
-  }
+  if (response.status === 204) return null;
+  return response.json();
 }
 
 function showMissingMessage() {
@@ -92,7 +61,7 @@ function showMissingMessage() {
 
 function createBoard() {
   columnsContainer.innerHTML = "";
-  const columns = room.retro.columns || [];
+  const columns = room.columns || defaultColumns;
 
   columns.forEach((columnData) => {
     const template = document.getElementById("columnTemplate");
@@ -116,7 +85,6 @@ function createBoard() {
       addCard(list, {
         id: createId(),
         text: text.trim(),
-        author: "anônimo",
         votes: 0,
         columnId: columnData.id,
       });
@@ -128,9 +96,7 @@ function createBoard() {
     if (!isOwner) {
       removeColumnBtn.style.display = "none";
     } else {
-      removeColumnBtn.addEventListener("click", () => {
-        removeColumn(columnData.id);
-      });
+      removeColumnBtn.addEventListener("click", () => removeColumn(columnData.id));
     }
 
     columnsContainer.appendChild(column);
@@ -177,7 +143,6 @@ function collectCards() {
     cards.push({
       id: item.dataset.cardId || createId(),
       text: item.querySelector(".card-text").textContent,
-      author: "anônimo",
       votes: Number(item.querySelector(".vote-btn span").textContent || 0),
       columnId: item.dataset.columnId,
     });
@@ -185,12 +150,14 @@ function collectCards() {
   return cards;
 }
 
-function saveBoardToRetro() {
+async function saveBoardToRetro() {
   if (!room) return;
-  room.retro.cards = collectCards();
-  room.retro.columns = getCurrentColumnsFromDom();
-  room.retro.updatedAt = new Date().toISOString();
-  persist();
+  room.cards = collectCards();
+  room.columns = getCurrentColumnsFromDom();
+  await api(`/retros/${room.id}`, {
+    method: "PUT",
+    body: JSON.stringify({ columns: room.columns, cards: room.cards }),
+  });
 }
 
 function getCurrentColumnsFromDom() {
@@ -201,7 +168,7 @@ function getCurrentColumnsFromDom() {
 }
 
 function loadRetroCards() {
-  const cards = room.retro.cards || [];
+  const cards = room.cards || [];
   const listsByColumn = {};
   document.querySelectorAll(".column").forEach((col) => {
     listsByColumn[col.dataset.columnId] = col.querySelector(".card-list");
@@ -215,7 +182,6 @@ function loadRetroCards() {
     addCard(target, {
       ...card,
       columnId: card.columnId || fallbackColumnId,
-      author: "anônimo",
     });
   });
 
@@ -226,7 +192,7 @@ function addColumn() {
   if (!isOwner) return;
   const name = newColumnNameInput.value.trim();
   if (!name) return;
-  room.retro.columns.push({ id: createId(), name });
+  room.columns.push({ id: createId(), name });
   newColumnNameInput.value = "";
   createBoard();
   loadRetroCards();
@@ -235,7 +201,7 @@ function addColumn() {
 
 function updateColumnName(columnId, newName) {
   if (!isOwner) return;
-  const column = room.retro.columns.find((item) => item.id === columnId);
+  const column = room.columns.find((item) => item.id === columnId);
   if (!column) return;
   column.name = newName;
   saveBoardToRetro();
@@ -243,24 +209,22 @@ function updateColumnName(columnId, newName) {
 
 function removeColumn(columnId) {
   if (!isOwner) return;
-  if ((room.retro.columns || []).length <= 1) {
+  if ((room.columns || []).length <= 1) {
     alert("A retro precisa ter ao menos uma coluna.");
     return;
   }
 
-  const targetColumn = room.retro.columns.find((col) => col.id === columnId);
+  const targetColumn = room.columns.find((col) => col.id === columnId);
   if (!targetColumn) return;
+  if (!confirm(`Remover a coluna '${targetColumn.name}'? Os cartões irão para a primeira coluna.`)) return;
 
-  const confirmRemove = confirm(`Remover a coluna '${targetColumn.name}'? Os cartões irão para a primeira coluna.`);
-  if (!confirmRemove) return;
-
-  const remaining = room.retro.columns.filter((col) => col.id !== columnId);
+  const remaining = room.columns.filter((col) => col.id !== columnId);
   const destinationId = remaining[0].id;
 
-  room.retro.cards = (room.retro.cards || []).map((card) =>
+  room.cards = (room.cards || []).map((card) =>
     card.columnId === columnId ? { ...card, columnId: destinationId } : card
   );
-  room.retro.columns = remaining;
+  room.columns = remaining;
 
   createBoard();
   loadRetroCards();
@@ -268,7 +232,7 @@ function removeColumn(columnId) {
 }
 
 function clearBoard() {
-  room.retro.cards = [];
+  room.cards = [];
   createBoard();
   saveBoardToRetro();
 }
@@ -277,17 +241,13 @@ function copyLink() {
   shareUrlInput.select();
   navigator.clipboard
     .writeText(shareUrlInput.value)
-    .then(() => {
-      alert("Link copiado para a área de transferência.");
-    })
-    .catch(() => {
-      alert("Não foi possível copiar automaticamente. Copie manualmente o link no campo.");
-    });
+    .then(() => alert("Link copiado para a área de transferência."))
+    .catch(() => alert("Não foi possível copiar automaticamente. Copie manualmente o link no campo."));
 }
 
 function setupHeaderAndShare() {
-  boardTitle.textContent = room.retro.title;
-  retroTitleHeading.textContent = room.retro.title;
+  boardTitle.textContent = room.title;
+  retroTitleHeading.textContent = room.title;
   teamContext.textContent = `Time: ${room.team.name}`;
   shareUrlInput.value = window.location.href;
 
@@ -298,15 +258,15 @@ function setupHeaderAndShare() {
 
 function setupEvents() {
   document.getElementById("copyLink").addEventListener("click", copyLink);
-  document.getElementById("saveRetro").addEventListener("click", () => {
-    saveBoardToRetro();
+  document.getElementById("saveRetro").addEventListener("click", async () => {
+    await saveBoardToRetro();
     alert("Retrospectiva salva.");
   });
 
   document.getElementById("addColumn").addEventListener("click", addColumn);
   document.getElementById("clearBoard").addEventListener("click", clearBoard);
-  document.getElementById("finishRetro").addEventListener("click", () => {
-    saveBoardToRetro();
+  document.getElementById("finishRetro").addEventListener("click", async () => {
+    await saveBoardToRetro();
     window.location.href = "index.html";
   });
 
@@ -316,13 +276,21 @@ function setupEvents() {
   });
 }
 
-if (!room) {
-  showMissingMessage();
-} else {
-  normalizeRetroModel(room.retro);
+async function init() {
+  if (!retroId) return showMissingMessage();
+
+  try {
+    room = await api(`/retros/${retroId}`);
+  } catch {
+    return showMissingMessage();
+  }
+
+  isOwner = room.creatorSessionId === getSessionId();
+
   setupHeaderAndShare();
   createBoard();
   loadRetroCards();
-  saveBoardToRetro();
   setupEvents();
 }
+
+init();
