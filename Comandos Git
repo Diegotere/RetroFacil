@@ -1,0 +1,77 @@
+Se você estiver tentando mudar quem está fazendo o commit (nome/email), os comandos seriam:
+
+bash
+git config user.name "Seu Nome"
+git config user.email "seu@email.com"
+
+para "informar" ou conectar o seu repositório local a um repositório no GitHub via linha de comando, você deve configurar o remote origin.
+
+Aqui estão os comandos principais:
+
+1. Se você acabou de criar o repositório local
+Se você rodou git init agora e quer conectar ao GitHub:
+
+bash
+# Adiciona o endereço do GitHub como o seu "remote" principal (origin)
+git remote add origin https://github.com/seu-usuario/nome-do-repositorio.git
+# Define o nome da branch principal (geralmente main)
+git branch -M main
+# Envia os arquivos pela primeira vez vinculando as pastas
+git push -u origin main
+
+
+2. Se o repositório já tem um "remote" e você quer mudar
+Se você já tinha configurado um repositório e quer trocar para outro:
+
+bash
+git remote set-url origin https://github.com/seu-usuario/novo-repositorio.git
+3. Como verificar qual repositório está configurado
+Para saber para onde o VS Code está enviando o código no momento:
+
+bash
+git remote -v
+
+3. Como verificar qual repositório está configurado
+Para saber para onde o VS Code está enviando o código no momento:
+
+bash
+git remote -v
+Qual URL usar?
+No GitHub, clique no botão verde "<> Code" e escolha uma das opções:
+
+HTTPS: Mais simples (ex: https://github.com/user/repo.git). Geralmente pede login/senha ou token.
+SSH: Mais seguro e não pede senha toda vez, mas exige que você tenha uma chave SSH configurada no seu PC e no GitHub (ex: git@github.com:user/repo.git).
+Dica no VS Code: Você também pode fazer isso sem comandos clicando no ícone de Source Control (Ctrl+Shift+G) -> ... (três pontinhos) -> Remote -> Add Remote.
+
+10:49 AM
+E como remover um repositorio que foi adicionado para adicionar outros?
+Para remover um repositório remoto (link com o GitHub) e adicionar um novo, você tem dois caminhos: remover e adicionar do zero, ou apenas atualizar o endereço.
+
+1. Remover e Adicionar (O jeito mais limpo)
+Se você quer apagar a conexão atual (geralmente chamada de origin) para colocar uma nova:
+
+bash
+# 1. Remove a conexão atual
+git remote remove origin
+# 2. Adiciona o novo repositório
+git remote add origin https://github.com/seu-usuario/novo-repo.git
+# 3. Verifica se deu certo
+git remote -v
+2. Apenas Atualizar (O jeito mais rápido)
+Se você já tem um origin mas ele aponta para o link errado, você não precisa remover, pode apenas "sobrescrever":
+
+bash
+git remote set-url origin https://github.com/seu-usuario/novo-repo.git
+E se eu quiser começar o Git do zero na pasta?
+Se o que você quer é "resetar" tudo (apagar todo o histórico de commits locais e conexões) para começar como se a pasta nunca tivesse tido Git:
+
+No terminal (Mac/Linux): rm -rf .git
+No terminal (Windows/PowerShell): rm -Recurse -Force .git
+Depois comece de novo com git init.
+Atenção: Apagar a pasta .git deleta todo o histórico de versões do seu projeto local, então use apenas se quiser realmente começar do zero!
+
+No VS Code (Interface Visual):
+Vá na aba de Controle de Código-Fonte (ícone da ramificação).
+Clique nos ... (três pontinhos) no topo do painel.
+Vá em Remotos -> Remover Remoto.
+Depois use Remotos -> Adicionar Remoto.
