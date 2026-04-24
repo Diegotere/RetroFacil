@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RetroFacil - Sala da Retro</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero compact">
+      <nav class="nav">
+        <div class="brand">
+          <span class="logo">⏪</span>
+          <span>RetroFácil</span>
+        </div>
+        <a href="index.html" class="ghost link-btn">← Voltar ao painel</a>
+      </nav>
+      <section class="hero-content compact">
+        <h1 id="retroTitleHeading">Retrospectiva</h1>
+        <p id="teamContext"></p>
+      </section>
+    </header>
+
+    <main>
+      <section class="panel share-panel">
+        <h2>Compartilhar sala</h2>
+        <p class="hint">
+          Envie este endereço para colaboradores acessarem esta retrospectiva e adicionarem cartões anonimamente.
+        </p>
+        <div class="share-row">
+          <input id="shareUrl" type="text" readonly />
+          <button class="primary" id="copyLink">Copiar link</button>
+          <button class="ghost" id="saveRetro">Salvar agora</button>
+        </div>
+      </section>
+
+      <section class="panel share-panel" id="columnConfigSection">
+        <h2>Configurar colunas</h2>
+        <p class="hint">Você pode criar, editar e remover colunas deste quadro.</p>
+        <div class="share-row">
+          <input id="newColumnName" type="text" maxlength="30" placeholder="Nome da nova coluna" />
+          <button class="primary" id="addColumn">Adicionar coluna</button>
+        </div>
+      </section>
+
+      <section class="board" id="retroBoard">
+        <header class="board-header">
+          <h2 id="boardTitle">Retrospectiva</h2>
+          <div class="board-controls">
+            <button class="ghost" id="clearBoard">Limpar quadro</button>
+          </div>
+        </header>
+
+        <div class="columns" id="columns"></div>
+
+        <footer class="board-footer">
+          <button class="primary" id="startVoting">Modo votação</button>
+          <button class="ghost" id="finishRetro">Encerrar retrospectiva</button>
+        </footer>
+      </section>
+    </main>
+
+    <template id="columnTemplate">
+      <article class="column" data-column-id="">
+        <header>
+          <input class="column-title-input" maxlength="30" />
+          <div class="column-actions">
+            <button class="ghost small add-card">+ cartão</button>
+            <button class="ghost small remove-column">🗑</button>
+          </div>
+        </header>
+        <ul class="card-list"></ul>
+      </article>
+    </template>
+
+    <template id="cardTemplate">
+      <li class="card-item">
+        <div class="card-top">
+          <span class="card-number"></span>
+          <button class="ghost small remove-card" title="remover cartão">×</button>
+        </div>
+        <p class="card-text"></p>
+        <div class="card-footer">
+          <span class="meta">anônimo</span>
+          <button class="vote-btn" title="votar">👍 <span>0</span></button>
+        </div>
+      </li>
+    </template>
+
+    <script src="retro.js"></script>
+  </body>
+</html>

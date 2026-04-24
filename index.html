@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RetroFacil</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="nav">
+        <div class="brand">
+          <span class="logo">⏪</span>
+          <span>RetroFácil</span>
+        </div>
+      </nav>
+      <section class="hero-content">
+        <h1>Painel de Times e Retrospectivas</h1>
+        <p>
+          Crie times, acompanhe histórico mensal e abra retrospectivas em páginas
+          dedicadas com link compartilhável para colaboradores.
+        </p>
+      </section>
+    </header>
+
+    <main>
+      <section class="workspace">
+        <article class="panel">
+          <h2>Configuração de Times</h2>
+          <p class="hint">Crie e selecione times para separar histórico e indicadores.</p>
+
+          <div class="team-create">
+            <input id="teamName" type="text" placeholder="Novo time (ex: Squad Payments)" maxlength="40" />
+            <button class="primary" id="createTeam">Criar time</button>
+          </div>
+
+          <label class="field">
+            <span>Time atual</span>
+            <select id="teamSelect"></select>
+          </label>
+
+          <div class="stack-actions">
+            <button class="ghost danger" id="deleteTeam">Excluir time selecionado</button>
+          </div>
+
+          <label class="field">
+            <span>Título da nova retrospectiva</span>
+            <input id="retroTitle" type="text" maxlength="60" value="Sprint - Retrospectiva" />
+          </label>
+
+          <div class="stack-actions">
+            <button class="primary" id="createRetro">Criar nova retro (abrir página)</button>
+          </div>
+
+          <h3>Retros deste time</h3>
+          <ul id="retroList" class="retro-list"></ul>
+        </article>
+
+        <article class="panel reports">
+          <h2>Relatórios por Time</h2>
+          <p class="hint" id="reportSummary">Sem dados para o time selecionado.</p>
+
+          <h3>Top situações mais votadas</h3>
+          <ol id="topSituations" class="rank-list"></ol>
+
+          <h3>Nuvem de palavras recorrentes</h3>
+          <div id="wordCloud" class="word-cloud"></div>
+
+          <h3>Retros por mês</h3>
+          <ul id="monthList" class="month-list"></ul>
+        </article>
+      </section>
+    </main>
+
+    <script src="index.js"></script>
+  </body>
+</html>
