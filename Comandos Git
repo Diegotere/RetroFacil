@@ -75,3 +75,50 @@ Vá na aba de Controle de Código-Fonte (ícone da ramificação).
 Clique nos ... (três pontinhos) no topo do painel.
 Vá em Remotos -> Remover Remoto.
 Depois use Remotos -> Adicionar Remoto.
+
+
+
+
+
+Edited Comandos%20Git
+Ran command: `git push origin main`
+Ran command: `git status`
+Viewed Comandos%20Git:85-115
+Ran command: `git push origin main`
+
+Esse erro (**non-fast-forward**) acontece porque o GitHub tem arquivos ou commits que você **não tem no seu computador**. Por exemplo, se você criou o repositório no GitHub com um arquivo README.md ou uma Licença, o seu computador está "atrasado" em relação ao servidor.
+
+Para resolver, você precisa "puxar" as mudanças do GitHub para o seu PC antes de enviar as suas. Siga estes passos:
+
+### 1. Sincronize o seu PC com o GitHub (Pull)
+Execute este comando para baixar o que está no GitHub e juntar com o seu trabalho:
+
+```bash
+git pull origin main --rebase
+```
+
+*   **Se der certo:** Ele vai baixar os arquivos (como o README). Depois disso, tente o `push` novamente: `git push origin main`.
+*   **Se der erro de "unrelated histories":** Se o Git reclamar que as histórias são incompatíveis, use este comando mais forte:
+    ```bash
+    git pull origin main --allow-unrelated-histories
+    ```
+
+### 2. Tente o Push novamente
+Após o comando acima ter finalizado sem erros, envie seus arquivos:
+
+```bash
+git push origin main
+```
+
+---
+
+### Solução "Forçada" (CUIDADO!)
+Se você tem certeza de que o que está no seu computador é o que deve valer e você **quer apagar qualquer coisa que esteja no GitHub** (como um README vazio), você pode forçar o envio:
+
+```bash
+git push -f origin main
+```
+> [!CAUTION]
+> **Aviso:** O comando `-f` (force) substitui tudo o que está no GitHub pelo que está no seu PC. Use apenas se você for o único trabalhando no projeto e não se importar em perder o que está lá no site agora.
+
+**Dica de ouro:** Sempre que começar a trabalhar, é um bom hábito rodar um `git pull` para garantir que seu PC tem a versão mais recente do código.
