@@ -1,3 +1,14 @@
+const token = localStorage.getItem("retrofacil_token");
+const currentUserStr = localStorage.getItem("retrofacil_user");
+let currentUser = null;
+try {
+  currentUser = JSON.parse(currentUserStr);
+} catch(e){}
+
+if (!token || !currentUser) {
+  window.location.href = "login.html";
+}
+
 const SESSION_KEY = "retrofacil_session_id";
 const defaultColumns = [
   { id: "col-good", name: "😀 Funcionou bem" },
@@ -36,9 +47,20 @@ function getSessionId() {
 
 async function api(path, options = {}) {
   const response = await fetch(`/api${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+      ...(options.headers || {}) 
+    },
     ...options,
   });
+
+  if (response.status === 401 || response.status === 403) {
+    localStorage.removeItem("retrofacil_token");
+    localStorage.removeItem("retrofacil_user");
+    window.location.href = "login.html";
+    return;
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
@@ -87,6 +109,7 @@ function createBoard() {
         text: text.trim(),
         votes: 0,
         columnId: columnData.id,
+        userId: currentUser.id,
       });
       renumberColumn(list);
       saveBoardToRetro();
@@ -108,13 +131,19 @@ function addCard(targetList, card) {
   const item = template.content.firstElementChild.cloneNode(true);
   item.dataset.cardId = card.id;
   item.dataset.columnId = card.columnId;
+  item.dataset.userId = card.userId || currentUser.id;
   item.querySelector(".card-text").textContent = card.text;
+
+  const removeBtn = item.querySelector(".remove-card");
+  if (!isOwner && item.dataset.userId !== currentUser.id) {
+    removeBtn.style.display = "none";
+  }
 
   const voteBtn = item.querySelector(".vote-btn");
   const voteCount = voteBtn.querySelector("span");
   voteCount.textContent = String(card.votes || 0);
 
-  item.querySelector(".remove-card").addEventListener("click", () => {
+  removeBtn.addEventListener("click", () => {
     item.remove();
     renumberColumn(targetList);
     saveBoardToRetro();
@@ -145,6 +174,7 @@ function collectCards() {
       text: item.querySelector(".card-text").textContent,
       votes: Number(item.querySelector(".vote-btn span").textContent || 0),
       columnId: item.dataset.columnId,
+      userId: item.dataset.userId,
     });
   });
   return cards;
@@ -239,9 +269,17 @@ function clearBoard() {
 
 function copyLink() {
   shareUrlInput.select();
+  const btn = document.getElementById("copyLink");
+  const originalText = btn.textContent;
+
   navigator.clipboard
     .writeText(shareUrlInput.value)
-    .then(() => alert("Link copiado para a área de transferência."))
+    .then(() => {
+      btn.textContent = "Copiado! ✓";
+      setTimeout(() => {
+        btn.textContent = originalText;
+      }, 2000);
+    })
     .catch(() => alert("Não foi possível copiar automaticamente. Copie manualmente o link no campo."));
 }
 
@@ -269,6 +307,15 @@ function setupEvents() {
     await saveBoardToRetro();
     window.location.href = "index.html";
   });
+  
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", () => {
+      localStorage.removeItem("retrofacil_token");
+      localStorage.removeItem("retrofacil_user");
+      window.location.href = "login.html";
+    });
+  }
 
   startVotingBtn.addEventListener("click", () => {
     votingMode = !votingMode;
@@ -285,7 +332,7 @@ async function init() {
     return showMissingMessage();
   }
 
-  isOwner = room.creatorSessionId === getSessionId();
+  isOwner = room.creatorSessionId === currentUser.id;
 
   setupHeaderAndShare();
   createBoard();

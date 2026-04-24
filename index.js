@@ -1,3 +1,8 @@
+const token = localStorage.getItem("retrofacil_token");
+if (!token) {
+  window.location.href = "login.html";
+}
+
 const SESSION_KEY = "retrofacil_session_id";
 
 const teamNameInput = document.getElementById("teamName");
@@ -27,10 +32,22 @@ function getSessionId() {
 }
 
 async function api(path, options = {}) {
+  const currentToken = localStorage.getItem("retrofacil_token");
   const response = await fetch(`/api${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${currentToken}`,
+      ...(options.headers || {}) 
+    },
     ...options,
   });
+
+  if (response.status === 401 || response.status === 403) {
+    localStorage.removeItem("retrofacil_token");
+    localStorage.removeItem("retrofacil_user");
+    window.location.href = "login.html";
+    return;
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
@@ -193,6 +210,15 @@ function setupEvents() {
   document.getElementById("createTeam").addEventListener("click", createTeam);
   document.getElementById("deleteTeam").addEventListener("click", deleteSelectedTeam);
   document.getElementById("createRetro").addEventListener("click", createRetroAndOpen);
+  
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", () => {
+      localStorage.removeItem("retrofacil_token");
+      localStorage.removeItem("retrofacil_user");
+      window.location.href = "login.html";
+    });
+  }
 
   teamSelect.addEventListener("change", async (event) => {
     state.currentTeamId = event.target.value;

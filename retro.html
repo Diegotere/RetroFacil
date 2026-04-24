@@ -13,7 +13,11 @@
           <span class="logo">⏪</span>
           <span>RetroFácil</span>
         </div>
-        <a href="index.html" class="ghost link-btn">← Voltar ao painel</a>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button class="ghost small" id="themeToggle">🌙 Modo Escuro</button>
+          <a href="index.html" class="ghost link-btn small">← Painel</a>
+          <button class="ghost danger small" id="logoutBtn">Sair</button>
+        </div>
       </nav>
       <section class="hero-content compact">
         <h1 id="retroTitleHeading">Retrospectiva</h1>
@@ -87,6 +91,7 @@
       </li>
     </template>
 
+    <script src="theme.js"></script>
     <script src="retro.js"></script>
   </body>
 </html>
