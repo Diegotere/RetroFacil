@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 const JWT_SECRET = process.env.JWT_SECRET || "retrofacil_secret_key_123";
 
 // ATENÇÃO: Substitua pelo seu Client ID real
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "COLOQUE_SEU_CLIENT_ID_AQUI";
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "737345557047-cd71egdu71tpd8sa66rtb09jj71d51lp.apps.googleusercontent.com";
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 const app = express();
