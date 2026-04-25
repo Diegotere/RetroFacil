@@ -71,6 +71,28 @@ body {
   font-size: 1.4rem;
 }
 
+.brand-logo {
+  height: 4rem;
+  width: auto;
+  object-fit: contain;
+}
+
+/* Logo maior no topo da sidebar */
+.sidebar .brand-logo {
+  height: 7rem;
+  width: 100%;
+  object-fit: contain;
+  margin: 0 auto;
+  display: block;
+}
+
+/* Logo maior na tela de login */
+.login-logo {
+  height: 10rem;
+  width: auto;
+  object-fit: contain;
+}
+
 .hero-content {
   margin-top: 1.5rem;
   max-width: 860px;
@@ -441,7 +463,8 @@ select {
 
 .sidebar .brand {
   margin-bottom: 2rem;
-  font-size: 1.3rem;
+  display: flex;
+  justify-content: center;
 }
 
 .sidebar-nav {
@@ -722,4 +745,23 @@ select {
     gap: 1rem;
   }
 }
+/* Role-based visibility - controlled via JS, these are fallback defaults */
+.admin-only {
+  /* Visibility controlled dynamically by retro.js via applyRoleVisibility() */
+}
 
+/* Viewer welcome message styling */
+.viewer-only {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
+  display: inline-block;
+}
+
+:root.dark .viewer-only {
+  background: rgba(3, 105, 161, 0.25);
+  color: #7dd3fc;
+}

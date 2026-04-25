@@ -45,3 +45,67 @@ Ao implementar estas ou novas funcionalidades, sempre basear-se no arquivo `skil
 - Garantir que o estilo mantenha consistência com os tokens base do projeto no `styles.css`.
 - As manipulações no DOM devem ser otimizadas para reduzir reflows.
 - Validação em ambas as camadas (Frontend e Backend) é obrigatória.
+
+---
+
+## 6. Controle de Acesso por Papel (Admin vs. Colaborador)
+
+### 6.1. Contexto e Motivação
+A tela de retrospectiva (`retro.html`) exibe atualmente todas as funcionalidades para qualquer pessoa que acessa o link, independente de ser o criador (admin) ou um colaborador convidado. Isso expõe controles sensíveis (edição de colunas, link de compartilhamento) para pessoas que não deveriam vê-los.
+
+### 6.2. Definição de Papéis
+
+| Papel | Como Acessa | O que pode ver/fazer |
+|---|---|---|
+| **Admin (Criador)** | Faz login com e-mail/senha ou Google e acessa a retro pelo Dashboard | Vê tudo: quadro completo, edição de colunas, link de compartilhamento, botão "Encerrar retrospectiva", "Limpar quadro" e modo de votação. |
+| **Colaborador (Viewer)** | Acessa diretamente via link compartilhável, **sem login** | Vê apenas: nome da sprint, nome do time, e o quadro de cartões (pode adicionar cartões e votar, mas não edita colunas nem vê controles admin). |
+
+### 6.3. Regras de Negócio
+
+- O **criador da retrospectiva** é identificado pelo `creator_session_id` (campo `retros.creator_session_id`), que armazena o `user.id` do usuário autenticado que criou a retro.
+- O **papel do usuário atual** é determinado assim:
+  - Se há um token JWT válido no `localStorage` **E** o `user.id` do token corresponde ao `creator_session_id` da retro → **ADMIN**.
+  - Caso contrário (sem token, token de outro usuário, ou acesso pelo link) → **COLABORADOR**.
+- A verificação de papel deve ocorrer tanto no **Frontend** (para esconder/mostrar elementos) quanto no **Backend** (para proteger rotas de edição).
+
+### 6.4. Interface do Colaborador (Viewer)
+
+A interface simplificada para colaboradores deve exibir apenas:
+1. **Cabeçalho:** Logo do RetroFácil + Nome da sprint + Nome do time.
+2. **Quadro:** As colunas e os cartões, com botão `+ Cartão` em cada coluna e botão de votação (👍) em cada cartão.
+3. **Sem acesso a:**
+   - Seção "Compartilhar sala" (link + botão "Copiar link")
+   - Seção "Configurar colunas" (adicionar/remover/renomear colunas)
+   - Botão "Encerrar retrospectiva"
+   - Botão "Limpar quadro"
+   - Botão "Salvar agora" (a versão viewer deve salvar automaticamente ao adicionar cartão)
+
+### 6.5. Interface do Admin
+
+O admin vê todos os controles já existentes na tela atual, conforme a imagem de referência (screenshot fornecido pelo usuário):
+- Seção "Compartilhar sala" com link e botão "Copiar link"
+- Seção "Configurar colunas" com campo de texto e botão "Adicionar coluna"
+- Botão de lápis (✏️) e lixeira (🗑️) em cada coluna
+- Botão "Salvar agora"
+- Botão "Encerrar retrospectiva"
+- Botão "Limpar quadro"
+- Botão "Modo votação"
+
+### 6.6. Mudanças Necessárias no Código
+
+#### Backend (`server.js`)
+- A rota `GET /api/retros/:retroId` deve retornar o campo `creator_session_id` para que o frontend possa comparar com o usuário logado.
+- As rotas de **edição de colunas** e **limpar quadro** devem validar se o requisitante é o criador da retro, retornando `403 Forbidden` caso contrário.
+
+#### Frontend (`retro.js` / `retro.html`)
+- Após carregar os dados da retro, comparar `retro.creatorSessionId` com o `user.id` do localStorage.
+- Se for admin → renderizar a interface completa (comportamento atual).
+- Se for colaborador → ocultar todos os elementos admin (via CSS classe `.admin-only { display: none }` ou remoção do DOM).
+
+#### Banco de Dados
+- Nenhuma alteração de schema necessária. O campo `creator_session_id` já existe na tabela `retros` e já armazena o `user.id`.
+
+### 6.7. UX para Colaboradores
+- O colaborador que acessa pelo link **não precisa fazer login**.
+- Seus cartões são salvos como "anônimo" (sem `user_id`).
+- A página deve exibir uma mensagem de boas-vindas simples, ex: *"Você está colaborando em [Nome da Sprint] do time [Nome do Time]."*

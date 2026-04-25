@@ -12,7 +12,14 @@
 <body>
   <main style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
     <article class="panel" style="width: 100%; max-width: 400px;">
-      <h2 style="text-align: center; margin-bottom: 1.5rem;">⏪ RetroFácil</h2>
+      <div style="text-align: center; margin-bottom: 1.5rem;">
+        <img src="logo.png" alt="RetroFácil Logo" class="login-logo" />
+      </div>
+
+      <!-- Contexto: exibido quando acessa via link de retro compartilhada -->
+      <div id="retroContext" style="display:none; background: #e0f2fe; color: #0369a1; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; text-align: center; font-size: 0.9rem;">
+        👋 Faça login para participar da retrospectiva compartilhada.
+      </div>
 
       <div id="loginSection">
         <h3>Entrar</h3>
@@ -28,7 +35,7 @@
           <button type="submit" class="primary" style="width: 100%; margin-top: 0.5rem;">Entrar</button>
         </form>
         <p style="text-align: center; margin-top: 1rem; color: var(--muted);">
-          Ou <button type="button" class="ghost small" id="showRegister">Cadastre-se</button>
+          <button type="button" class="ghost small" id="showRegister">Cadastre-se</button>
         </p>
       </div>
 

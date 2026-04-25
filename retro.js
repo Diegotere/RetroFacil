@@ -1,13 +1,11 @@
+// === Autenticação ===
+// Colaboradores acessam SEM login. Apenas verifica o papel após carregar a retro.
 const token = localStorage.getItem("retrofacil_token");
 const currentUserStr = localStorage.getItem("retrofacil_user");
 let currentUser = null;
 try {
   currentUser = JSON.parse(currentUserStr);
 } catch(e){}
-
-if (!token || !currentUser) {
-  window.location.href = "login.html";
-}
 
 const SESSION_KEY = "retrofacil_session_id";
 const defaultColumns = [
@@ -21,17 +19,15 @@ const columnsContainer = document.getElementById("columns");
 const boardTitle = document.getElementById("boardTitle");
 const retroTitleHeading = document.getElementById("retroTitleHeading");
 const teamContext = document.getElementById("teamContext");
-const shareUrlInput = document.getElementById("shareUrl");
-const startVotingBtn = document.getElementById("startVoting");
+const viewerWelcome = document.getElementById("viewerWelcome");
 const newColumnNameInput = document.getElementById("newColumnName");
-const columnConfigSection = document.getElementById("columnConfigSection");
 
 const params = new URLSearchParams(window.location.search);
 const retroId = params.get("retro");
 
 let votingMode = false;
 let room = null;
-let isOwner = false;
+let isAdmin = false; // true apenas se for o criador da retro
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -45,17 +41,15 @@ function getSessionId() {
   return created;
 }
 
+// API com token opcional — colaboradores fazem chamadas sem token
 async function api(path, options = {}) {
-  const response = await fetch(`/api${path}`, {
-    headers: { 
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-      ...(options.headers || {}) 
-    },
-    ...options,
-  });
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  if (response.status === 401 || response.status === 403) {
+  const response = await fetch(`/api${path}`, { headers, ...options });
+
+  // Se 401/403 e era admin, desloga. Se viewer, ignora.
+  if ((response.status === 401 || response.status === 403) && token) {
     localStorage.removeItem("retrofacil_token");
     localStorage.removeItem("retrofacil_user");
     window.location.href = "login.html";
@@ -81,6 +75,35 @@ function showMissingMessage() {
   `;
 }
 
+// Aplica visibilidade baseada no papel:
+// .admin-only → visível apenas para admins
+// .viewer-only → visível apenas para colaboradores
+function applyRoleVisibility() {
+  document.querySelectorAll(".admin-only").forEach(el => {
+    el.style.display = isAdmin ? "" : "none";
+  });
+
+  // Botão de login e mensagem para colaboradores
+  if (!isAdmin) {
+    // Mostra o botão de login se o usuário NÃO estiver logado
+    const viewerLoginBtn = document.getElementById("viewerLoginBtn");
+    if (viewerLoginBtn) {
+      if (!token) {
+        viewerLoginBtn.style.display = "";
+      } else {
+        viewerLoginBtn.style.display = "none"; // logado mas não é admin, não mostra de novo
+      }
+    }
+
+    // Mensagem de boas-vindas
+    if (viewerWelcome) {
+      viewerWelcome.style.display = "";
+      const name = currentUser ? ` Olá, ${currentUser.name}!` : "";
+      viewerWelcome.textContent = `${name} Você está colaborando em "${room.title}" do time ${room.team.name}.`;
+    }
+  }
+}
+
 function createBoard() {
   columnsContainer.innerHTML = "";
   const columns = room.columns || defaultColumns;
@@ -92,38 +115,44 @@ function createBoard() {
 
     const titleInput = column.querySelector(".column-title-input");
     titleInput.value = columnData.name;
-    titleInput.readOnly = !isOwner;
-    titleInput.addEventListener("change", () => {
-      if (!isOwner) return;
-      const next = titleInput.value.trim();
-      titleInput.value = next || columnData.name;
-      updateColumnName(columnData.id, titleInput.value);
-    });
+    titleInput.readOnly = !isAdmin;
+
+    if (isAdmin) {
+      titleInput.addEventListener("change", () => {
+        const next = titleInput.value.trim();
+        titleInput.value = next || columnData.name;
+        updateColumnName(columnData.id, titleInput.value);
+      });
+    }
 
     column.querySelector(".add-card").addEventListener("click", () => {
       const text = prompt("Digite o cartão:");
       if (!text || !text.trim()) return;
       const list = column.querySelector(".card-list");
+      const userId = currentUser ? currentUser.id : null;
       addCard(list, {
         id: createId(),
         text: text.trim(),
         votes: 0,
         columnId: columnData.id,
-        userId: currentUser.id,
+        userId,
       });
       renumberColumn(list);
       saveBoardToRetro();
     });
 
     const removeColumnBtn = column.querySelector(".remove-column");
-    if (!isOwner) {
-      removeColumnBtn.style.display = "none";
-    } else {
-      removeColumnBtn.addEventListener("click", () => removeColumn(columnData.id));
+    if (removeColumnBtn) {
+      if (isAdmin) {
+        removeColumnBtn.addEventListener("click", () => removeColumn(columnData.id));
+      }
     }
 
     columnsContainer.appendChild(column);
   });
+
+  // Após renderizar as colunas, aplica visibilidade dos botões .admin-only dentro delas
+  applyRoleVisibility();
 }
 
 function addCard(targetList, card) {
@@ -131,26 +160,29 @@ function addCard(targetList, card) {
   const item = template.content.firstElementChild.cloneNode(true);
   item.dataset.cardId = card.id;
   item.dataset.columnId = card.columnId;
-  item.dataset.userId = card.userId || currentUser.id;
+  item.dataset.userId = card.userId || "";
   item.querySelector(".card-text").textContent = card.text;
 
   const removeBtn = item.querySelector(".remove-card");
-  if (!isOwner && item.dataset.userId !== currentUser.id) {
+  // Pode remover: admin pode tudo; colaborador só pode remover seus próprios cartões
+  const canRemove = isAdmin || (currentUser && item.dataset.userId === currentUser.id);
+  if (!canRemove) {
     removeBtn.style.display = "none";
+  } else {
+    removeBtn.addEventListener("click", () => {
+      item.remove();
+      renumberColumn(targetList);
+      saveBoardToRetro();
+    });
   }
 
   const voteBtn = item.querySelector(".vote-btn");
   const voteCount = voteBtn.querySelector("span");
   voteCount.textContent = String(card.votes || 0);
 
-  removeBtn.addEventListener("click", () => {
-    item.remove();
-    renumberColumn(targetList);
-    saveBoardToRetro();
-  });
-
   voteBtn.addEventListener("click", () => {
-    if (!votingMode) return;
+    // Admin precisa do modo votação; colaboradores podem votar livremente
+    if (isAdmin && !votingMode) return;
     const hasVoted = voteBtn.classList.toggle("active");
     const next = Number(voteCount.textContent) + (hasVoted ? 1 : -1);
     voteCount.textContent = String(Math.max(next, 0));
@@ -174,7 +206,7 @@ function collectCards() {
       text: item.querySelector(".card-text").textContent,
       votes: Number(item.querySelector(".vote-btn span").textContent || 0),
       columnId: item.dataset.columnId,
-      userId: item.dataset.userId,
+      userId: item.dataset.userId || null,
     });
   });
   return cards;
@@ -208,18 +240,14 @@ function loadRetroCards() {
     const fallback = document.querySelector(".card-list");
     const target = listsByColumn[card.columnId] || fallback;
     const fallbackColumnId = target.closest(".column")?.dataset.columnId;
-
-    addCard(target, {
-      ...card,
-      columnId: card.columnId || fallbackColumnId,
-    });
+    addCard(target, { ...card, columnId: card.columnId || fallbackColumnId });
   });
 
   Object.values(listsByColumn).forEach((list) => renumberColumn(list));
 }
 
 function addColumn() {
-  if (!isOwner) return;
+  if (!isAdmin) return;
   const name = newColumnNameInput.value.trim();
   if (!name) return;
   room.columns.push({ id: createId(), name });
@@ -230,7 +258,7 @@ function addColumn() {
 }
 
 function updateColumnName(columnId, newName) {
-  if (!isOwner) return;
+  if (!isAdmin) return;
   const column = room.columns.find((item) => item.id === columnId);
   if (!column) return;
   column.name = newName;
@@ -238,76 +266,92 @@ function updateColumnName(columnId, newName) {
 }
 
 function removeColumn(columnId) {
-  if (!isOwner) return;
+  if (!isAdmin) return;
   if ((room.columns || []).length <= 1) {
     alert("A retro precisa ter ao menos uma coluna.");
     return;
   }
-
   const targetColumn = room.columns.find((col) => col.id === columnId);
   if (!targetColumn) return;
   if (!confirm(`Remover a coluna '${targetColumn.name}'? Os cartões irão para a primeira coluna.`)) return;
 
   const remaining = room.columns.filter((col) => col.id !== columnId);
   const destinationId = remaining[0].id;
-
   room.cards = (room.cards || []).map((card) =>
     card.columnId === columnId ? { ...card, columnId: destinationId } : card
   );
   room.columns = remaining;
-
   createBoard();
   loadRetroCards();
   saveBoardToRetro();
 }
 
 function clearBoard() {
+  if (!isAdmin) return;
+  if (!confirm("Limpar todos os cartões do quadro?")) return;
   room.cards = [];
   createBoard();
   saveBoardToRetro();
 }
 
 function copyLink() {
+  const shareUrlInput = document.getElementById("shareUrl");
   shareUrlInput.select();
   const btn = document.getElementById("copyLink");
   const originalText = btn.textContent;
-
   navigator.clipboard
     .writeText(shareUrlInput.value)
     .then(() => {
       btn.textContent = "Copiado! ✓";
-      setTimeout(() => {
-        btn.textContent = originalText;
-      }, 2000);
+      setTimeout(() => { btn.textContent = originalText; }, 2000);
     })
-    .catch(() => alert("Não foi possível copiar automaticamente. Copie manualmente o link no campo."));
+    .catch(() => alert("Não foi possível copiar automaticamente. Copie manualmente."));
 }
 
 function setupHeaderAndShare() {
   boardTitle.textContent = room.title;
   retroTitleHeading.textContent = room.title;
   teamContext.textContent = `Time: ${room.team.name}`;
-  shareUrlInput.value = window.location.href;
 
-  if (!isOwner && columnConfigSection) {
-    columnConfigSection.style.display = "none";
-  }
+  const shareUrlInput = document.getElementById("shareUrl");
+  if (shareUrlInput) shareUrlInput.value = window.location.href;
 }
 
 function setupEvents() {
-  document.getElementById("copyLink").addEventListener("click", copyLink);
-  document.getElementById("saveRetro").addEventListener("click", async () => {
-    await saveBoardToRetro();
-    alert("Retrospectiva salva.");
-  });
+  // Apenas configura eventos de elementos que existem e são visíveis para admin
+  const copyLinkBtn = document.getElementById("copyLink");
+  if (copyLinkBtn) copyLinkBtn.addEventListener("click", copyLink);
 
-  document.getElementById("addColumn").addEventListener("click", addColumn);
-  document.getElementById("clearBoard").addEventListener("click", clearBoard);
-  document.getElementById("finishRetro").addEventListener("click", async () => {
-    await saveBoardToRetro();
-    window.location.href = "index.html";
-  });
-  
+  const saveRetroBtn = document.getElementById("saveRetro");
+  if (saveRetroBtn) {
+    saveRetroBtn.addEventListener("click", async () => {
+      await saveBoardToRetro();
+      alert("Retrospectiva salva.");
+    });
+  }
+
+  const addColumnBtn = document.getElementById("addColumn");
+  if (addColumnBtn) addColumnBtn.addEventListener("click", addColumn);
+
+  const clearBoardBtn = document.getElementById("clearBoard");
+  if (clearBoardBtn) clearBoardBtn.addEventListener("click", clearBoard);
+
+  const finishRetroBtn = document.getElementById("finishRetro");
+  if (finishRetroBtn) {
+    finishRetroBtn.addEventListener("click", async () => {
+      await saveBoardToRetro();
+      window.location.href = "index.html";
+    });
+  }
+
+  const viewerLoginBtn = document.getElementById("viewerLoginBtn");
+  if (viewerLoginBtn) {
+    viewerLoginBtn.addEventListener("click", () => {
+      // Redireciona para login passando o ID da retro para retornar após autenticar
+      window.location.href = `login.html?retro=${retroId}`;
+    });
+  }
+
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", () => {
@@ -317,27 +361,38 @@ function setupEvents() {
     });
   }
 
-  startVotingBtn.addEventListener("click", () => {
-    votingMode = !votingMode;
-    startVotingBtn.textContent = votingMode ? "Encerrar votação" : "Modo votação";
-  });
+  const startVotingBtn = document.getElementById("startVoting");
+  if (startVotingBtn) {
+    startVotingBtn.addEventListener("click", () => {
+      votingMode = !votingMode;
+      startVotingBtn.textContent = votingMode ? "Encerrar votação" : "Modo votação";
+    });
+  }
 }
 
 async function init() {
   if (!retroId) return showMissingMessage();
 
   try {
+    // Busca a retro — a rota é pública para leitura (colaboradores sem token)
     room = await api(`/retros/${retroId}`);
   } catch {
     return showMissingMessage();
   }
 
-  isOwner = room.creatorSessionId === currentUser.id;
+  if (!room) return showMissingMessage();
+
+  // Determina o papel: admin se tiver token E for o criador da retro
+  isAdmin = !!(token && currentUser && room.creatorSessionId === currentUser.id);
 
   setupHeaderAndShare();
+  applyRoleVisibility();
   createBoard();
   loadRetroCards();
   setupEvents();
 }
 
 init();
+
+
+

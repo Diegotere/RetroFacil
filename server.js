@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE,
   password_hash TEXT,
   google_id TEXT UNIQUE,
+  role TEXT NOT NULL DEFAULT 'collaborator',
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS teams (
@@ -81,6 +82,31 @@ try {
   // Ignora se a coluna já existir
 }
 
+// Tenta adicionar a coluna role na tabela users se não existir
+try {
+  await db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'collaborator';");
+} catch (e) {
+  // Ignora se a coluna já existir
+}
+
+// Seed: Garante que o super admin existe
+{
+  const SUPER_ADMIN_EMAIL = "diegotere@yahoo.com.br";
+  const existing = await db.get("SELECT id FROM users WHERE email = ?", SUPER_ADMIN_EMAIL);
+  if (!existing) {
+    const id = createId();
+    const hash = await bcrypt.hash("senha@123", 10);
+    await db.run(
+      "INSERT INTO users (id, name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      id, "Diego (Super Admin)", SUPER_ADMIN_EMAIL, hash, "super_admin", new Date().toISOString()
+    );
+    console.log("[Seed] Super admin criado:", SUPER_ADMIN_EMAIL);
+  } else {
+    // Garante que ele é super_admin mesmo que já existisse
+    await db.run("UPDATE users SET role = 'super_admin' WHERE email = ?", SUPER_ADMIN_EMAIL);
+  }
+}
+
 const defaultColumns = [
   { id: "col-good", name: "😀 Funcionou bem" },
   { id: "col-bad", name: "😕 Pode melhorar" },
@@ -92,7 +118,7 @@ function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Middleware de Autenticação
+// Middleware de Autenticação Normal
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -100,6 +126,20 @@ function authenticateToken(req, res, next) {
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) return res.status(403).json({ error: "Token inválido ou expirado." });
+    req.user = user;
+    next();
+  });
+}
+
+// Middleware exclusivo para Super Admin
+function authenticateSuperAdmin(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Acesso negado." });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: "Token inválido ou expirado." });
+    if (user.role !== "super_admin") return res.status(403).json({ error: "Acesso restrito ao Super Admin." });
     req.user = user;
     next();
   });
@@ -142,8 +182,9 @@ app.post("/api/auth/login", async (req, res) => {
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.status(401).json({ error: "Credenciais inválidas." });
 
-    const token = jwt.sign({ id: user.id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+    const role = user.role || "collaborator";
+    const token = jwt.sign({ id: user.id, name: user.name, email: user.email, role }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role } });
   } catch (error) {
     res.status(500).json({ error: "Erro no servidor." });
   }
@@ -279,7 +320,7 @@ app.put("/api/retros/:retroId/status", authenticateToken, async (req, res) => {
   res.status(204).end();
 });
 
-app.get("/api/retros/:retroId", authenticateToken, async (req, res) => {
+app.get("/api/retros/:retroId", async (req, res) => {
   const retro = await db.get(
     `SELECT r.id, r.title, r.creator_session_id AS creatorSessionId, r.created_at AS date, r.updated_at AS updatedAt, t.id AS teamId, t.name AS teamName
      FROM retros r JOIN teams t ON t.id = r.team_id WHERE r.id = ?`, req.params.retroId
@@ -302,15 +343,32 @@ app.get("/api/retros/:retroId", authenticateToken, async (req, res) => {
   });
 });
 
-app.put("/api/retros/:retroId", authenticateToken, async (req, res) => {
+// Middleware opcional — tenta autenticar mas não bloqueia se não houver token
+function optionalAuth(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    req.user = err ? null : user;
+    next();
+  });
+}
+
+app.put("/api/retros/:retroId", optionalAuth, async (req, res) => {
   const retroId = req.params.retroId;
   const { columns = [], cards = [] } = req.body || {};
 
   const retro = await db.get("SELECT id, creator_session_id FROM retros WHERE id = ?", retroId);
   if (!retro) return res.status(404).json({ error: "Retro não encontrada" });
 
-  // Apenas o criador da retro pode mudar colunas
-  if (retro.creator_session_id === req.user.id) {
+  const currentUserId = req.user ? req.user.id : null;
+  const isOwner = currentUserId && retro.creator_session_id === currentUserId;
+
+  // Apenas o criador (admin) pode mudar colunas
+  if (isOwner) {
     await db.run("DELETE FROM retro_columns WHERE retro_id = ?", retroId);
     for (const [index, column] of columns.entries()) {
       await db.run("INSERT INTO retro_columns (id, retro_id, name, position) VALUES (?, ?, ?, ?)", column.id, retroId, column.name, index);
@@ -319,33 +377,30 @@ app.put("/api/retros/:retroId", authenticateToken, async (req, res) => {
 
   // Pega os cartões antigos para preservar os que não são do usuário atual
   const oldCards = await db.all("SELECT * FROM cards WHERE retro_id = ?", retroId);
-  
+
   await db.run("DELETE FROM cards WHERE retro_id = ?", retroId);
 
-  // Filtra cartões que o usuário enviou. Ele só pode enviar/alterar os dele (ou novos que não têm user_id salvo ainda).
-  // Se for o dono da retro, ele pode salvar qualquer coisa (excluir de outros).
-  const isOwner = retro.creator_session_id === req.user.id;
-
   const cardsToSave = [];
-  
-  // Adiciona de volta os cartões de outros usuários que não foram deletados pelo owner
+
+  // Preserva cartões de outros usuários (não pode deletar o cartão de outro se não for owner)
   oldCards.forEach(oldCard => {
-    if (oldCard.user_id !== req.user.id && !isOwner) {
-      // Se não sou o dono, mantenho o cartão do coleguinha intocado, pegando a nova posição se ele foi movido?
-      // O PUT reordena tudo. Pega a posição do payload se existir, senão mantém a antiga.
+    if (oldCard.user_id !== currentUserId && !isOwner) {
       const payloadCard = cards.find(c => c.id === oldCard.id);
       if (payloadCard) {
         cardsToSave.push({ ...oldCard, column_id: payloadCard.columnId, position: cards.indexOf(payloadCard), votes: payloadCard.votes });
       } else {
-        cardsToSave.push(oldCard); // Se não mandou, mas não pode deletar, salva de novo.
+        cardsToSave.push(oldCard);
       }
     }
   });
 
-  // Adiciona/Atualiza os cartões do próprio usuário (e os de outros se for o owner)
+  // Adiciona/Atualiza os cartões do próprio usuário (ou anônimos, ou todos se for owner)
   cards.forEach((card, index) => {
     const old = oldCards.find(c => c.id === card.id);
-    if (!old || old.user_id === req.user.id || isOwner) {
+    // Permite se: novo cartão, ou é o dono do cartão, ou é admin, ou cartão anônimo (null)
+    const cardOwner = old ? old.user_id : null;
+    const canSave = !old || isOwner || cardOwner === currentUserId || cardOwner === null;
+    if (canSave) {
       cardsToSave.push({
         id: card.id,
         retro_id: retroId,
@@ -353,12 +408,11 @@ app.put("/api/retros/:retroId", authenticateToken, async (req, res) => {
         text: card.text,
         votes: Number(card.votes || 0),
         position: index,
-        user_id: old ? old.user_id : req.user.id
+        user_id: old ? old.user_id : currentUserId
       });
     }
   });
 
-  // Remove duplicatas que possam ter surgido
   const uniqueCardsToSave = [...new Map(cardsToSave.map(item => [item.id, item])).values()];
 
   for (const card of uniqueCardsToSave) {
@@ -404,7 +458,58 @@ app.get("/api/reports/:teamId", authenticateToken, async (req, res) => {
   res.json({ retroCount: retros.length, top, months, words });
 });
 
+// =======================
+// Rotas de Administração (Super Admin)
+// =======================
+
+// Login do super admin (retorna token com role=super_admin)
+app.post("/api/admin/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Preencha email e senha." });
+
+  try {
+    const user = await db.get("SELECT * FROM users WHERE email = ?", email);
+    if (!user || !user.password_hash) return res.status(401).json({ error: "Credenciais inválidas." });
+    if (user.role !== "super_admin") return res.status(403).json({ error: "Acesso restrito." });
+
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.status(401).json({ error: "Credenciais inválidas." });
+
+    const token = jwt.sign({ id: user.id, name: user.name, email: user.email, role: "super_admin" }, JWT_SECRET, { expiresIn: "8h" });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: "super_admin" } });
+  } catch (error) {
+    res.status(500).json({ error: "Erro no servidor." });
+  }
+});
+
+// Lista todos os usuários
+app.get("/api/admin/users", authenticateSuperAdmin, async (_req, res) => {
+  const users = await db.all(
+    `SELECT id, name, email, role, created_at,
+      (SELECT COUNT(*) FROM teams t WHERE t.creator_id = users.id) AS teamCount,
+      (SELECT COUNT(*) FROM retros r WHERE r.creator_session_id = users.id) AS retroCount
+     FROM users ORDER BY created_at DESC`
+  );
+  res.json(users);
+});
+
+// Atualiza o papel (role) de um usuário
+app.put("/api/admin/users/:userId/role", authenticateSuperAdmin, async (req, res) => {
+  const { role } = req.body;
+  const validRoles = ["admin", "collaborator"];
+  if (!validRoles.includes(role)) return res.status(400).json({ error: "Papel inválido. Use 'admin' ou 'collaborator'." });
+
+  // Não permite rebaixar o super admin
+  const target = await db.get("SELECT role FROM users WHERE id = ?", req.params.userId);
+  if (!target) return res.status(404).json({ error: "Usuário não encontrado." });
+  if (target.role === "super_admin") return res.status(403).json({ error: "Não é possível alterar o papel do Super Admin." });
+
+  await db.run("UPDATE users SET role = ? WHERE id = ?", role, req.params.userId);
+  res.status(204).end();
+});
+
 app.use(express.static(__dirname));
+
 
 const port = process.env.PORT || 4173;
 app.listen(port, () => {

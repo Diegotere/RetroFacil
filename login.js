@@ -3,9 +3,30 @@ const registerForm = document.getElementById("registerForm");
 const loginSection = document.getElementById("loginSection");
 const registerSection = document.getElementById("registerSection");
 
-// Se já estiver logado, redireciona
+// Verifica se veio de um link de retro compartilhada (?retro=XXXX)
+const loginParams = new URLSearchParams(window.location.search);
+const retroRedirect = loginParams.get("retro");
+if (retroRedirect) {
+  // Salva para usar após o login
+  localStorage.setItem("retrofacil_retro_redirect", retroRedirect);
+  // Mostra o banner de contexto
+  const ctx = document.getElementById("retroContext");
+  if (ctx) ctx.style.display = "block";
+}
+
+// Função central de redirecionamento pós-login
+function getRedirectUrl() {
+  const savedRetro = localStorage.getItem("retrofacil_retro_redirect");
+  if (savedRetro) {
+    localStorage.removeItem("retrofacil_retro_redirect");
+    return `retro.html?retro=${savedRetro}`;
+  }
+  return "index.html";
+}
+
+// Se já estiver logado, redireciona para o destino correto
 if (localStorage.getItem("retrofacil_token")) {
-  window.location.href = "index.html";
+  window.location.href = getRedirectUrl();
 }
 
 document.getElementById("showRegister").addEventListener("click", () => {
@@ -37,7 +58,7 @@ async function apiAuth(path, body) {
 function handleSuccess(data) {
   localStorage.setItem("retrofacil_token", data.token);
   localStorage.setItem("retrofacil_user", JSON.stringify(data.user));
-  window.location.href = "index.html";
+  window.location.href = getRedirectUrl();
 }
 
 loginForm.addEventListener("submit", async (e) => {
@@ -67,3 +88,4 @@ window.handleCredentialResponse = async (response) => {
   });
   handleSuccess(data);
 };
+

@@ -10,23 +10,28 @@
     <header class="hero compact">
       <nav class="nav">
         <div class="brand">
-          <span class="logo">⏪</span>
-          <span>RetroFácil</span>
+          <img src="logo.png" alt="RetroFácil Logo" class="brand-logo" />
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
           <button class="ghost small" id="themeToggle">🌙 Modo Escuro</button>
-          <a href="index.html" class="ghost link-btn small">← Painel</a>
-          <button class="ghost danger small" id="logoutBtn">Sair</button>
+          <!-- Só admins veem o link para o painel e o botão de sair -->
+          <a href="index.html" class="ghost link-btn small admin-only">← Painel</a>
+          <button class="ghost danger small admin-only" id="logoutBtn">Sair</button>
+          <!-- Viewers veem o botão de login para se identificar -->
+          <button class="ghost small viewer-only" id="viewerLoginBtn" style="display:none;">👤 Fazer login</button>
         </div>
       </nav>
       <section class="hero-content compact">
         <h1 id="retroTitleHeading">Retrospectiva</h1>
         <p id="teamContext"></p>
+        <!-- Mensagem de boas-vindas para colaboradores -->
+        <p id="viewerWelcome" class="viewer-only hint" style="display:none;"></p>
       </section>
     </header>
 
     <main>
-      <section class="panel share-panel">
+      <!-- SEÇÃO ADMIN: Compartilhar sala -->
+      <section class="panel share-panel admin-only">
         <h2>Compartilhar sala</h2>
         <p class="hint">
           Envie este endereço para colaboradores acessarem esta retrospectiva e adicionarem cartões anonimamente.
@@ -38,7 +43,8 @@
         </div>
       </section>
 
-      <section class="panel share-panel" id="columnConfigSection">
+      <!-- SEÇÃO ADMIN: Configurar colunas -->
+      <section class="panel share-panel admin-only" id="columnConfigSection">
         <h2>Configurar colunas</h2>
         <p class="hint">Você pode criar, editar e remover colunas deste quadro.</p>
         <div class="share-row">
@@ -51,15 +57,17 @@
         <header class="board-header">
           <h2 id="boardTitle">Retrospectiva</h2>
           <div class="board-controls">
-            <button class="ghost" id="clearBoard">Limpar quadro</button>
+            <!-- BOTÃO ADMIN: Limpar quadro -->
+            <button class="ghost admin-only" id="clearBoard">Limpar quadro</button>
           </div>
         </header>
 
         <div class="columns" id="columns"></div>
 
         <footer class="board-footer">
-          <button class="primary" id="startVoting">Modo votação</button>
-          <button class="ghost" id="finishRetro">Encerrar retrospectiva</button>
+          <!-- BOTÃO ADMIN: Modo votação e Encerrar -->
+          <button class="primary admin-only" id="startVoting">Modo votação</button>
+          <button class="ghost admin-only" id="finishRetro">Encerrar retrospectiva</button>
         </footer>
       </section>
     </main>
@@ -70,7 +78,8 @@
           <input class="column-title-input" maxlength="30" />
           <div class="column-actions">
             <button class="ghost small add-card">+ cartão</button>
-            <button class="ghost small remove-column">🗑</button>
+            <!-- BOTÃO ADMIN: remover coluna -->
+            <button class="ghost small remove-column admin-only">🗑</button>
           </div>
         </header>
         <ul class="card-list"></ul>
