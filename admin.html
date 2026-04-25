@@ -3,68 +3,64 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Painel Admin - RetroFácil</title>
+  <title>Admin - RetroFácil</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="dashboard-body">
-  <div class="dashboard-layout">
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <img src="logo.png" alt="RetroFácil" class="sidebar-logo">
-      </div>
-      <nav class="sidebar-nav">
-        <a href="#" class="active">👥 Usuários</a>
-        <a href="index.html">← Dashboard</a>
-      </nav>
-      <div class="sidebar-footer">
-        <button class="ghost danger small" id="logoutBtn">Sair</button>
-      </div>
-    </aside>
+<body style="background: var(--bg); display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 2rem 1rem;">
+  
+  <main style="width: 100%; max-width: 1200px; margin: 0 auto;">
+    <!-- Logo Centralizada -->
+    <div style="text-align: center; margin-bottom: 2rem;">
+      <img src="logo.png" alt="RetroFácil Logo" class="login-logo">
+    </div>
 
-    <main class="dashboard-main">
-      <header class="dashboard-header">
-        <div>
-          <h1>Painel de Administração</h1>
-          <p class="text-muted">Gerencie permissões e visualize usuários cadastrados.</p>
-        </div>
-      </header>
+    <!-- Seção de Login (Estilo Cartão) -->
+    <div id="adminLoginSection" class="panel" style="max-width: 400px; margin: 0 auto;">
+      <h2 style="text-align: center; margin-bottom: 1.5rem;">Painel Admin</h2>
+      <form id="adminLoginForm">
+        <label class="field">
+          <span>E-mail Administrador</span>
+          <input type="email" id="adminEmail" required>
+        </label>
+        <label class="field">
+          <span>Senha</span>
+          <input type="password" id="adminPassword" required>
+        </label>
+        <button type="submit" class="primary" style="width: 100%; margin-top: 1rem;">Acessar Painel</button>
+      </form>
+      <p style="text-align: center; margin-top: 1.5rem;">
+        <a href="login.html" class="ghost small">Voltar para Login</a>
+      </p>
+    </div>
 
-      <div class="dashboard-content">
-        <div id="adminLoginSection" class="panel" style="max-width: 400px; margin: 2rem auto;">
-          <h3>Login Admin</h3>
-          <form id="adminLoginForm">
-            <label class="field">
-              <span>E-mail</span>
-              <input type="email" id="adminEmail" required>
-            </label>
-            <label class="field">
-              <span>Senha</span>
-              <input type="password" id="adminPassword" required>
-            </label>
-            <button type="submit" class="primary" style="width: 100%;">Entrar</button>
-          </form>
-        </div>
-
-        <div id="adminPanelSection" style="display: none;">
-          <div class="panel">
-            <table style="width: 100%; border-collapse: collapse;">
-              <thead>
-                <tr style="text-align: left; border-bottom: 2px solid var(--border);">
-                  <th style="padding: 1rem;">Nome</th>
-                  <th style="padding: 1rem;">E-mail</th>
-                  <th style="padding: 1rem;">Papel</th>
-                  <th style="padding: 1rem;">Ação</th>
-                </tr>
-              </thead>
-              <tbody id="usersTableBody">
-                <!-- Preenchido via JS -->
-              </tbody>
-            </table>
-          </div>
+    <!-- Painel de Gerenciamento (Aparece após login) -->
+    <div id="adminPanelSection" style="display: none;">
+      <div class="panel" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0;">Gerenciamento de Usuários</h3>
+        <div style="display: flex; gap: 0.5rem;">
+          <a href="login.html" class="ghost small">Página Login</a>
+          <button class="ghost danger small" id="logoutBtn">Sair</button>
         </div>
       </div>
-    </main>
-  </div>
+
+      <div class="panel" style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
+          <thead>
+            <tr style="text-align: left; border-bottom: 2px solid var(--border);">
+              <th style="padding: 1rem;">Nome</th>
+              <th style="padding: 1rem;">E-mail</th>
+              <th style="padding: 1rem;">Papel</th>
+              <th style="padding: 1rem;">Nova Senha</th>
+              <th style="padding: 1rem;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <!-- Preenchido via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
 
   <script src="theme.js"></script>
   <script src="admin.js"></script>

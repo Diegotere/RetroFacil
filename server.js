@@ -24,6 +24,9 @@ const db = await open({
   driver: sqlite3.Database,
 });
 
+// Habilita suporte a chaves estrangeiras (essencial para ON DELETE CASCADE)
+await db.exec("PRAGMA foreign_keys = ON;");
+
 await db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -39,7 +42,7 @@ CREATE TABLE IF NOT EXISTS teams (
   name TEXT NOT NULL,
   creator_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  FOREIGN KEY(creator_id) REFERENCES users(id)
+  FOREIGN KEY(creator_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS retros (
   id TEXT PRIMARY KEY,
@@ -509,7 +512,34 @@ app.get("/api/admin/users", authenticateSuperAdmin, async (_req, res) => {
       (SELECT COUNT(*) FROM retros r WHERE r.creator_session_id = users.id) AS retroCount
      FROM users ORDER BY created_at DESC`
   );
+  // Não enviamos o hash da senha por segurança e porque ele é ilegível
   res.json(users);
+});
+
+// Atualiza a senha de um usuário
+app.put("/api/admin/users/:userId/password", authenticateSuperAdmin, async (req, res) => {
+  const { password } = req.body;
+  if (!password || password.length < 3) return res.status(400).json({ error: "Senha muito curta." });
+
+  const hash = await bcrypt.hash(password, 10);
+  await db.run("UPDATE users SET password_hash = ? WHERE id = ?", hash, req.params.userId);
+  res.status(204).end();
+});
+
+// Deleta um usuário e tudo o que ele criou
+app.delete("/api/admin/users/:userId", authenticateSuperAdmin, async (req, res) => {
+  const { userId } = req.params;
+
+  // Não permite que o super admin se delete
+  if (userId === req.user.id) {
+    return res.status(403).json({ error: "Você não pode deletar sua própria conta de Super Admin." });
+  }
+
+  // Com PRAGMA foreign_keys = ON, o banco cuidará de deletar times -> retros -> cards
+  // desde que as tabelas tenham sido criadas com ON DELETE CASCADE.
+  // Vamos garantir que o usuário seja removido.
+  await db.run("DELETE FROM users WHERE id = ?", userId);
+  res.status(204).end();
 });
 
 // Atualiza o papel (role) de um usuário
