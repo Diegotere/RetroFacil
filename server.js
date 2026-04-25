@@ -36,8 +36,10 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE TABLE IF NOT EXISTS teams (
   id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  created_at TEXT NOT NULL
+  name TEXT NOT NULL,
+  creator_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(creator_id) REFERENCES users(id)
 );
 CREATE TABLE IF NOT EXISTS retros (
   id TEXT PRIMARY KEY,
@@ -89,22 +91,31 @@ try {
   // Ignora se a coluna já existir
 }
 
-// Seed: Garante que o super admin existe
+// Seed: Garante que o super admin existe e tem a senha correta
 {
   const SUPER_ADMIN_EMAIL = "diegotere@yahoo.com.br";
+  const hash = await bcrypt.hash("senha@123", 10);
   const existing = await db.get("SELECT id FROM users WHERE email = ?", SUPER_ADMIN_EMAIL);
+  
   if (!existing) {
     const id = createId();
-    const hash = await bcrypt.hash("senha@123", 10);
     await db.run(
       "INSERT INTO users (id, name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       id, "Diego (Super Admin)", SUPER_ADMIN_EMAIL, hash, "super_admin", new Date().toISOString()
     );
     console.log("[Seed] Super admin criado:", SUPER_ADMIN_EMAIL);
   } else {
-    // Garante que ele é super_admin mesmo que já existisse
-    await db.run("UPDATE users SET role = 'super_admin' WHERE email = ?", SUPER_ADMIN_EMAIL);
+    // Garante que ele é super_admin e tem a senha definida/atualizada
+    await db.run("UPDATE users SET role = 'super_admin', password_hash = ? WHERE email = ?", hash, SUPER_ADMIN_EMAIL);
+    console.log("[Seed] Super admin atualizado:", SUPER_ADMIN_EMAIL);
   }
+}
+
+// Tenta adicionar a coluna creator_id na tabela teams se não existir
+try {
+  await db.exec("ALTER TABLE teams ADD COLUMN creator_id TEXT;");
+} catch (e) {
+  // Ignora se a coluna já existir
 }
 
 const defaultColumns = [
@@ -219,8 +230,9 @@ app.post("/api/auth/google", async (req, res) => {
       await db.run("UPDATE users SET google_id = ? WHERE id = ?", googleId, user.id);
     }
 
-    const token = jwt.sign({ id: user.id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+    const role = user.role || "collaborator";
+    const token = jwt.sign({ id: user.id, name: user.name, email: user.email, role }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role } });
   } catch (error) {
     res.status(500).json({ error: "Erro ao autenticar com Google." });
   }
@@ -234,15 +246,8 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
 // Rotas da Aplicação
 // =======================
 
-async function ensureDefaultTeam() {
-  const row = await db.get("SELECT id FROM teams LIMIT 1");
-  if (!row) {
-    await db.run("INSERT INTO teams (id, name, created_at) VALUES (?, ?, ?)", createId(), "Time Padrão", new Date().toISOString());
-  }
-}
-
-async function getTeams() {
-  const teams = await db.all("SELECT id, name FROM teams ORDER BY name ASC");
+async function getTeams(userId) {
+  const teams = await db.all("SELECT id, name FROM teams WHERE creator_id = ? ORDER BY name ASC", userId);
   for (const team of teams) {
     team.retros = await db.all(
       `SELECT r.id, r.title, r.status, r.created_at AS date, r.updated_at AS updatedAt,
@@ -253,27 +258,36 @@ async function getTeams() {
   return teams;
 }
 
-app.get("/api/teams", authenticateToken, async (_req, res) => {
-  await ensureDefaultTeam();
-  res.json({ teams: await getTeams() });
+app.get("/api/teams", authenticateToken, async (req, res) => {
+  if (req.user.role === 'collaborator') {
+    return res.status(403).json({ error: "Acesso restrito ao Dashboard." });
+  }
+  res.json({ teams: await getTeams(req.user.id) });
 });
 
 app.post("/api/teams", authenticateToken, async (req, res) => {
+  if (req.user.role === 'collaborator') {
+    return res.status(403).json({ error: "Você não tem permissão para criar times." });
+  }
   const name = (req.body?.name || "").trim();
   if (!name) return res.status(400).json({ error: "Nome é obrigatório" });
 
   try {
     const id = createId();
-    await db.run("INSERT INTO teams (id, name, created_at) VALUES (?, ?, ?)", id, name, new Date().toISOString());
+    await db.run("INSERT INTO teams (id, name, creator_id, created_at) VALUES (?, ?, ?, ?)", id, name, req.user.id, new Date().toISOString());
     res.status(201).json({ id, name });
-  } catch {
-    res.status(409).json({ error: "Time já existe" });
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao criar time" });
   }
 });
 
 app.delete("/api/teams/:teamId", authenticateToken, async (req, res) => {
+  // Garante que o usuário só pode deletar o PRÓPRIO time
+  const team = await db.get("SELECT creator_id FROM teams WHERE id = ?", req.params.teamId);
+  if (!team || team.creator_id !== req.user.id) {
+    return res.status(403).json({ error: "Ação não permitida" });
+  }
   await db.run("DELETE FROM teams WHERE id = ?", req.params.teamId);
-  await ensureDefaultTeam();
   res.status(204).end();
 });
 
@@ -464,16 +478,21 @@ app.get("/api/reports/:teamId", authenticateToken, async (req, res) => {
 
 // Login do super admin (retorna token com role=super_admin)
 app.post("/api/admin/auth/login", async (req, res) => {
-  const { email, password } = req.body;
+  let { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Preencha email e senha." });
 
+  email = email.trim().toLowerCase();
   try {
     const user = await db.get("SELECT * FROM users WHERE email = ?", email);
-    if (!user || !user.password_hash) return res.status(401).json({ error: "Credenciais inválidas." });
-    if (user.role !== "super_admin") return res.status(403).json({ error: "Acesso restrito." });
-
+    if (!user || !user.password_hash) return res.status(401).json({ error: "Usuário não encontrado ou sem senha local." });
+    
     const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) return res.status(401).json({ error: "Credenciais inválidas." });
+    if (!match) return res.status(401).json({ error: "Senha incorreta." });
+
+    if (user.role !== "super_admin") {
+      console.log(`[Admin Login Denied] Usuário ${email} tem role: ${user.role}`);
+      return res.status(403).json({ error: "Acesso negado: seu usuário não é um Super Admin." });
+    }
 
     const token = jwt.sign({ id: user.id, name: user.name, email: user.email, role: "super_admin" }, JWT_SECRET, { expiresIn: "8h" });
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: "super_admin" } });

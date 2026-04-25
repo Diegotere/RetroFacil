@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Admin - RetroFácil</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dashboard-body">
+  <div class="dashboard-layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <img src="logo.png" alt="RetroFácil" class="sidebar-logo">
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="active">👥 Usuários</a>
+        <a href="index.html">← Dashboard</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="ghost danger small" id="logoutBtn">Sair</button>
+      </div>
+    </aside>
+
+    <main class="dashboard-main">
+      <header class="dashboard-header">
+        <div>
+          <h1>Painel de Administração</h1>
+          <p class="text-muted">Gerencie permissões e visualize usuários cadastrados.</p>
+        </div>
+      </header>
+
+      <div class="dashboard-content">
+        <div id="adminLoginSection" class="panel" style="max-width: 400px; margin: 2rem auto;">
+          <h3>Login Admin</h3>
+          <form id="adminLoginForm">
+            <label class="field">
+              <span>E-mail</span>
+              <input type="email" id="adminEmail" required>
+            </label>
+            <label class="field">
+              <span>Senha</span>
+              <input type="password" id="adminPassword" required>
+            </label>
+            <button type="submit" class="primary" style="width: 100%;">Entrar</button>
+          </form>
+        </div>
+
+        <div id="adminPanelSection" style="display: none;">
+          <div class="panel">
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="text-align: left; border-bottom: 2px solid var(--border);">
+                  <th style="padding: 1rem;">Nome</th>
+                  <th style="padding: 1rem;">E-mail</th>
+                  <th style="padding: 1rem;">Papel</th>
+                  <th style="padding: 1rem;">Ação</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <!-- Preenchido via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="theme.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

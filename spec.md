@@ -109,3 +109,33 @@ O admin vê todos os controles já existentes na tela atual, conforme a imagem d
 - O colaborador que acessa pelo link **não precisa fazer login**.
 - Seus cartões são salvos como "anônimo" (sem `user_id`).
 - A página deve exibir uma mensagem de boas-vindas simples, ex: *"Você está colaborando em [Nome da Sprint] do time [Nome do Time]."*
+### 5. Hierarquia de Usuários e Permissões
+
+A plataforma utiliza um sistema de papéis (RBAC) para controlar o acesso:
+
+#### A. Super Admin (Dono da Plataforma)
+- **Acesso**: Página `/admin.html`.
+- **Credenciais Iniciais**: `diegotere@yahoo.com.br` / `senha@123`.
+- **Funcionalidades**:
+  - Visualizar todos os usuários cadastrados.
+  - Alterar o papel de um usuário de **Colaborador** para **Admin (Criador)**.
+  - Monitorar o volume de times e retrospectivas por usuário.
+
+#### B. Admin (Criador de Times/Retros)
+- **Acesso**: Dashboard (`index.html`).
+- **Funcionalidades**:
+  - Criar e gerenciar seus próprios times (isolados por `userId`).
+  - Criar e configurar colunas de retrospectivas.
+  - Encerrar sessões e gerar relatórios.
+
+#### C. Colaborador (Participante)
+- **Acesso**: Apenas via links compartilhados de retrospectivas (`retro.html`).
+- **Restrição**: Redirecionado para fora do Dashboard se tentar acesso direto.
+- **Funcionalidades**:
+  - Adicionar cartões e votar.
+  - Pode fazer login para se identificar nos cartões, mas continua restrito à visualização da retro.
+
+### 6. Isolamento de Dados
+Cada usuário com papel de **Admin** possui seu próprio ecossistema:
+- Os times criados por um usuário são vinculados ao seu `id` via `creator_id`.
+- Ao carregar o dashboard, o sistema filtra automaticamente apenas os times e retrospectivas pertencentes ao usuário logado.

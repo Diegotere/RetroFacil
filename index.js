@@ -1,5 +1,12 @@
 const token = localStorage.getItem("retrofacil_token");
+const currentUser = JSON.parse(localStorage.getItem("retrofacil_user") || "{}");
+
 if (!token) {
+  window.location.href = "login.html";
+} else if (currentUser.role === 'collaborator') {
+  // Se for colaborador, ele não pode estar no Dashboard.
+  // Redireciona para uma página de erro ou de volta para a última retro se existir
+  alert("Você não tem permissão para acessar o painel administrativo.");
   window.location.href = "login.html";
 }
 
