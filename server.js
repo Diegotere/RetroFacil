@@ -609,8 +609,57 @@ app.put("/api/admin/users/:userId/role", authenticateSuperAdmin, async (req, res
 
 app.use(express.static(__dirname));
 
-
 const port = process.env.PORT || 4173;
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`RetroFacil rodando em http://0.0.0.0:${port}`);
+});
+
+// WebSocket setup for real-time updates
+import { WebSocketServer } from 'ws';
+const wss = new WebSocketServer({ noServer: true });
+
+// Store active connections by retro ID
+const retroConnections = new Map();
+
+// Broadcast function to send updates to all clients viewing a specific retro
+function broadcastToRetro(retroId, data) {
+  const connections = retroConnections.get(retroId);
+  if (connections) {
+    connections.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(data));
+      }
+    });
+  }
+}
+
+// Handle WebSocket upgrades
+server.on('upgrade', (request, socket, head) => {
+  const url = new URL(request.url, `http://${request.headers.host}`);
+  const retroId = url.searchParams.get('retro');
+  
+  if (!retroId) {
+    socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+  
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, request);
+    
+    // Add connection to the retro's connection set
+    if (!retroConnections.has(retroId)) {
+      retroConnections.set(retroId, new Set());
+    }
+    const connections = retroConnections.get(retroId);
+    connections.add(ws);
+    
+    // Clean up when connection closes
+    ws.on('close', () => {
+      connections.delete(ws);
+      if (connections.size === 0) {
+        retroConnections.delete(retroId);
+      }
+    });
+  });
 });

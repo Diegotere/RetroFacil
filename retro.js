@@ -28,6 +28,7 @@ const retroId = params.get("retro");
 let votingMode = false;
 let room = null;
 let isAdmin = false; // true apenas se for o criador da retro
+let ws = null; // WebSocket connection
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -220,6 +221,17 @@ async function saveBoardToRetro() {
     method: "PUT",
     body: JSON.stringify({ columns: room.columns, cards: room.cards }),
   });
+  
+  // Broadcast the update to all connected clients
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'board_update',
+      data: {
+        columns: room.columns,
+        cards: room.cards
+      }
+    }));
+  }
 }
 
 function getCurrentColumnsFromDom() {
@@ -370,6 +382,43 @@ function setupEvents() {
   }
 }
 
+function setupWebSocket() {
+  // Connect to WebSocket server
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${window.location.host}?retro=${retroId}`);
+
+  ws.onopen = () => {
+    console.log('WebSocket connected for retro:', retroId);
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'board_update') {
+        // Update the board with the received data
+        room.columns = data.data.columns || room.columns;
+        room.cards = data.data.cards || room.cards;
+        
+        // Recreate the board and reload cards
+        createBoard();
+        loadRetroCards();
+      }
+    } catch (error) {
+      console.error('Error processing WebSocket message:', error);
+    }
+  };
+
+  ws.onclose = () => {
+    console.log('WebSocket disconnected for retro:', retroId);
+    // Attempt to reconnect after a short delay
+    setTimeout(setupWebSocket, 3000);
+  };
+
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+  };
+}
+
 async function init() {
   if (!retroId) return showMissingMessage();
 
@@ -390,6 +439,9 @@ async function init() {
   createBoard();
   loadRetroCards();
   setupEvents();
+  
+  // Setup WebSocket connection for real-time updates
+  setupWebSocket();
 }
 
 init();
