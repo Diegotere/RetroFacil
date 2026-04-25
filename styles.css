@@ -765,3 +765,23 @@ select {
   background: rgba(3, 105, 161, 0.25);
   color: #7dd3fc;
 }
+
+/* Password Visibility Toggle (Text Style) */
+.password-toggle-text {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--primary);
+  font-weight: 500;
+  text-decoration: none;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.password-toggle-text:hover {
+  opacity: 1;
+  text-decoration: underline;
+}

@@ -28,14 +28,51 @@
             <span>E-mail</span>
             <input type="email" id="loginEmail" required />
           </label>
-          <label class="field">
+          <div class="field">
             <span>Senha</span>
-            <input type="password" id="loginPassword" required />
-          </label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="password" id="loginPassword" required style="flex: 1;" />
+              <button type="button" class="password-toggle-text" onclick="togglePassword('loginPassword', this)">Mostrar</button>
+            </div>
+            <div style="text-align: center; margin-top: 8px;">
+              <a href="javascript:void(0)" id="showForgot" style="font-size: 0.85rem; color: var(--primary); text-decoration: none; font-weight: 500;">Esqueci minha senha</a>
+            </div>
+          </div>
           <button type="submit" class="primary" style="width: 100%; margin-top: 0.5rem;">Entrar</button>
         </form>
         <p style="text-align: center; margin-top: 1rem; color: var(--muted);">
           <button type="button" class="ghost small" id="showRegister">Cadastre-se</button>
+        </p>
+      </div>
+
+      <div id="forgotSection" style="display: none;">
+        <h3>Recuperar Senha</h3>
+        <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">Digite seu e-mail para receber um código de recuperação.</p>
+        <form id="forgotForm">
+          <label class="field">
+            <span>E-mail</span>
+            <input type="email" id="forgotEmail" required />
+          </label>
+          <button type="submit" class="primary" style="width: 100%; margin-top: 0.5rem;">Enviar Código</button>
+        </form>
+        <div id="resetSection" style="display: none; margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+          <form id="resetForm">
+            <label class="field">
+              <span>Código de 6 dígitos</span>
+              <input type="text" id="resetCode" maxlength="6" required />
+            </label>
+            <div class="field">
+              <span>Nova Senha</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="password" id="newPassword" required style="flex: 1;" />
+                <button type="button" class="password-toggle-text" onclick="togglePassword('newPassword', this)">Mostrar</button>
+              </div>
+            </div>
+            <button type="submit" class="primary" style="width: 100%;">Redefinir Senha</button>
+          </form>
+        </div>
+        <p style="text-align: center; margin-top: 1rem; color: var(--muted);">
+          <button type="button" class="ghost small" id="backToLogin">Voltar ao login</button>
         </p>
       </div>
 
@@ -50,10 +87,13 @@
             <span>E-mail</span>
             <input type="email" id="registerEmail" required />
           </label>
-          <label class="field">
+          <div class="field">
             <span>Senha</span>
-            <input type="password" id="registerPassword" required />
-          </label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="password" id="registerPassword" required style="flex: 1;" />
+              <button type="button" class="password-toggle-text" onclick="togglePassword('registerPassword', this)">Mostrar</button>
+            </div>
+          </div>
           <button type="submit" class="primary" style="width: 100%; margin-top: 0.5rem;">Criar conta</button>
         </form>
         <p style="text-align: center; margin-top: 1rem; color: var(--muted);">

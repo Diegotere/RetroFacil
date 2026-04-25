@@ -114,11 +114,12 @@ try {
   }
 }
 
-// Tenta adicionar a coluna creator_id na tabela teams se não existir
+// Tenta adicionar a coluna reset_code na tabela users se não existir
 try {
-  await db.exec("ALTER TABLE teams ADD COLUMN creator_id TEXT;");
+  await db.exec("ALTER TABLE users ADD COLUMN reset_code TEXT;");
+  await db.exec("ALTER TABLE users ADD COLUMN reset_expires TEXT;");
 } catch (e) {
-  // Ignora se a coluna já existir
+  // Ignora se as colunas já existirem
 }
 
 const defaultColumns = [
@@ -239,6 +240,55 @@ app.post("/api/auth/google", async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: "Erro ao autenticar com Google." });
   }
+});
+
+app.post("/api/auth/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "E-mail é obrigatório." });
+
+  const user = await db.get("SELECT id FROM users WHERE email = ?", email.trim().toLowerCase());
+  if (!user) {
+    return res.status(404).json({ 
+      error: "E-mail não cadastrado.", 
+      suggestRegister: true 
+    });
+  }
+
+  // Gera um código de 6 dígitos
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
+
+  await db.run("UPDATE users SET reset_code = ?, reset_expires = ? WHERE id = ?", code, expires, user.id);
+
+  // MOCK: Simulando o envio de e-mail (imprime no console para o desenvolvedor ver)
+  console.log(`\n📧 [MOCK EMAIL] Para: ${email}`);
+  console.log(`🔗 Código de recuperação: ${code}`);
+  console.log(`⏱️ Expira em: 15 minutos\n`);
+
+  res.json({ message: "Código enviado com sucesso!" });
+});
+
+app.post("/api/auth/reset-password", async (req, res) => {
+  const { email, code, newPassword } = req.body;
+  if (!email || !code || !newPassword) return res.status(400).json({ error: "Dados incompletos." });
+
+  const user = await db.get("SELECT * FROM users WHERE email = ?", email.trim().toLowerCase());
+  if (!user || user.reset_code !== code) {
+    return res.status(401).json({ error: "Código inválido." });
+  }
+
+  const now = new Date().toISOString();
+  if (user.reset_expires < now) {
+    return res.status(401).json({ error: "Código expirado." });
+  }
+
+  const hash = await bcrypt.hash(newPassword, 10);
+  await db.run(
+    "UPDATE users SET password_hash = ?, reset_code = NULL, reset_expires = NULL WHERE id = ?", 
+    hash, user.id
+  );
+
+  res.json({ message: "Senha redefinida com sucesso!" });
 });
 
 app.get("/api/auth/me", authenticateToken, (req, res) => {

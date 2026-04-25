@@ -22,10 +22,13 @@
           <span>E-mail Administrador</span>
           <input type="email" id="adminEmail" required>
         </label>
-        <label class="field">
+        <div class="field">
           <span>Senha</span>
-          <input type="password" id="adminPassword" required>
-        </label>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="password" id="adminPassword" required style="flex: 1;">
+            <button type="button" class="password-toggle-text" onclick="togglePassword('adminPassword', this)">Mostrar</button>
+          </div>
+        </div>
         <button type="submit" class="primary" style="width: 100%; margin-top: 1rem;">Acessar Painel</button>
       </form>
       <p style="text-align: center; margin-top: 1.5rem;">

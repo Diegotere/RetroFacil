@@ -1,4 +1,17 @@
 // theme.js
+
+// Função global para alternar visibilidade da senha (definida fora do DOMContentLoaded para ser acessível imediatamente)
+window.togglePassword = function(inputId, button) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isPassword = input.getAttribute("type") === "password";
+  input.setAttribute("type", isPassword ? "text" : "password");
+  
+  if (button) {
+    button.textContent = isPassword ? "Ocultar" : "Mostrar";
+  }
+};
+
 document.addEventListener("DOMContentLoaded", () => {
   const themeToggleBtn = document.getElementById("themeToggle");
   if (!themeToggleBtn) return;

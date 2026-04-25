@@ -54,8 +54,9 @@ async function loadUsers() {
           </select>
         </td>
         <td style="padding: 1rem;">
-          <div style="display: flex; gap: 0.5rem;">
-            <input type="text" placeholder="Nova senha" id="pwd-${user.id}" style="width: 100px; padding: 0.2rem;">
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="password" placeholder="Nova senha" id="pwd-${user.id}" style="width: 100px; padding: 0.2rem;">
+            <button type="button" class="password-toggle-text" onclick="togglePassword('pwd-${user.id}', this)" style="font-size: 0.75rem;">Mostrar</button>
             <button class="ghost small" onclick="updatePassword('${user.id}')">💾</button>
           </div>
         </td>

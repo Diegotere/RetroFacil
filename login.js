@@ -29,13 +29,31 @@ if (localStorage.getItem("retrofacil_token")) {
   window.location.href = getRedirectUrl();
 }
 
+const forgotSection = document.getElementById("forgotSection");
+const resetSection = document.getElementById("resetSection");
+const forgotForm = document.getElementById("forgotForm");
+const resetForm = document.getElementById("resetForm");
+
 document.getElementById("showRegister").addEventListener("click", () => {
   loginSection.style.display = "none";
   registerSection.style.display = "block";
+  forgotSection.style.display = "none";
 });
 
 document.getElementById("showLogin").addEventListener("click", () => {
   registerSection.style.display = "none";
+  loginSection.style.display = "block";
+  forgotSection.style.display = "none";
+});
+
+document.getElementById("showForgot").addEventListener("click", () => {
+  loginSection.style.display = "none";
+  forgotSection.style.display = "block";
+  resetSection.style.display = "none";
+});
+
+document.getElementById("backToLogin").addEventListener("click", () => {
+  forgotSection.style.display = "none";
   loginSection.style.display = "block";
 });
 
@@ -78,6 +96,58 @@ registerForm.addEventListener("submit", async (e) => {
     password: document.getElementById("registerPassword").value,
   });
   handleSuccess(data);
+});
+
+forgotForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = document.getElementById("forgotEmail").value;
+  try {
+    const res = await fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (data.suggestRegister) {
+        if (confirm(`${data.error} Deseja ir para a tela de cadastro?`)) {
+          forgotSection.style.display = "none";
+          registerSection.style.display = "block";
+          document.getElementById("registerEmail").value = email;
+        }
+      } else {
+        alert(data.error);
+      }
+      return;
+    }
+    alert("Código enviado! Verifique o console do servidor (Simulação de e-mail).");
+    resetSection.style.display = "block";
+  } catch (err) {
+    alert("Erro ao enviar código.");
+  }
+});
+
+resetForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = document.getElementById("forgotEmail").value;
+  const code = document.getElementById("resetCode").value;
+  const newPassword = document.getElementById("newPassword").value;
+  
+  try {
+    const res = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code, newPassword }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    
+    alert("Senha redefinida! Agora você pode fazer login.");
+    forgotSection.style.display = "none";
+    loginSection.style.display = "block";
+  } catch (err) {
+    alert(err.message);
+  }
 });
 
 window.handleCredentialResponse = async (response) => {
