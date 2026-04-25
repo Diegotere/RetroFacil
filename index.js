@@ -93,6 +93,115 @@ function renderTeamSelect() {
   });
 }
 
+function renderTeamsList() {
+  const teamsList = document.getElementById("teamsList");
+  if (!teamsList) return;
+
+  if (!state.teams || state.teams.length === 0) {
+    teamsList.innerHTML = '<p class="text-muted">Nenhum time cadastrado.</p>';
+    return;
+  }
+
+  teamsList.innerHTML = state.teams
+    .map(
+      (team) => `
+      <div class="team-item" data-team-id="${team.id}">
+        <div class="team-info">
+          <div class="team-name">${team.name}</div>
+          <div class="team-details">
+            ${team.retros?.length || 0} retrospectiva(s)
+          </div>
+        </div>
+        <div class="team-actions">
+          <button class="btn-edit" title="Editar time" data-team-id="${team.id}">
+            ✏️
+          </button>
+          <button class="btn-delete" title="Excluir time" data-team-id="${team.id}">
+            🗑️
+          </button>
+        </div>
+      </div>
+    `
+    )
+    .join("");
+
+  // Add event listeners to edit/delete buttons
+  teamsList.querySelectorAll(".btn-edit").forEach((button) => {
+    button.addEventListener("click", (e) => {
+      const teamId = e.currentTarget.dataset.teamId;
+      editTeam(teamId);
+    });
+  });
+
+  teamsList.querySelectorAll(".btn-delete").forEach((button) => {
+    button.addEventListener("click", (e) => {
+      const teamId = e.currentTarget.dataset.teamId;
+      deleteTeam(teamId);
+    });
+  });
+}
+
+function editTeam(teamId) {
+  const team = state.teams.find((t) => t.id === teamId);
+  if (!team) return;
+
+  const newName = prompt("Editar nome do time:", team.name);
+  if (newName === null || newName.trim() === "") return;
+
+  const trimmedName = newName.trim();
+  if (trimmedName === team.name) return; // No change
+
+  // Check if name already exists for another team
+  const duplicate = state.teams.some(
+    (t) => t.id !== teamId && t.name.toLowerCase() === trimmedName.toLowerCase()
+  );
+  if (duplicate) {
+    alert("Já existe um time com este nome.");
+    return;
+  }
+
+  api(`/teams/${teamId}`, {
+    method: "PUT",
+    body: JSON.stringify({ name: trimmedName }),
+  })
+    .then(() => {
+      alert("Time atualizado com sucesso!");
+      refreshTeams(teamId);
+    })
+    .catch((error) => alert(error.message));
+}
+
+function deleteTeam(teamId) {
+  const team = state.teams.find((t) => t.id === teamId);
+  if (!team) return;
+
+  // Don't allow deleting the currently selected team
+  if (team.id === state.currentTeamId) {
+    alert(
+      "Você não pode excluir o time atualmente selecionado. Selecione outro time primeiro."
+    );
+    return;
+  }
+
+  if ((team.retros || []).length > 0) {
+    const confirmDelete = confirm(
+      `O time '${team.name}' possui retrospectivas. Todas serão excluídas. Deseja continuar?`
+    );
+    if (!confirmDelete) return;
+  } else if (
+    !confirm(`Deseja realmente excluir o time '${team.name}'?`)
+  ) {
+    return;
+  }
+
+  api(`/teams/${teamId}`, { method: "DELETE" })
+    .then(() => {
+      alert("Time excluído com sucesso!");
+      refreshTeams();
+    })
+    .catch((error) => alert(error.message));
+}
+
 async function refreshTeams(preferTeamId) {
   const data = await api("/teams");
   state.teams = data.teams || [];
@@ -107,39 +216,31 @@ async function refreshTeams(preferTeamId) {
   renderTeamSelect();
   renderRetroList();
   await renderReports();
+  renderTeamsList(); // Atualiza a lista de times no modal
 }
 
 async function createTeam() {
   const name = teamNameInput.value.trim();
-  if (!name) return;
+  if (!name) {
+    document.getElementById('teamCreateHint').textContent = 'Por favor, digite um nome para o time.';
+    document.getElementById('teamCreateHint').style.color = 'var(--danger)';
+    return;
+  }
 
   try {
     const created = await api("/teams", { method: "POST", body: JSON.stringify({ name }) });
     teamNameInput.value = "";
+    document.getElementById('teamCreateHint').textContent = `Time '${created.name}' criado com sucesso!`;
+    document.getElementById('teamCreateHint').style.color = 'var(--success)';
     closeModal(modalManageTeams);
     await refreshTeams(created.id);
   } catch (error) {
-    alert(error.message);
+    document.getElementById('teamCreateHint').textContent = error.message;
+    document.getElementById('teamCreateHint').style.color = 'var(--danger)';
   }
 }
 
-async function deleteCurrentTeam() {
-  const team = getCurrentTeam();
-  if (!team) return;
-
-  if ((team.retros || []).length > 0) {
-    const confirmDelete = confirm(
-      `O time '${team.name}' possui retrospectivas. Todas serão excluídas. Deseja continuar?`
-    );
-    if (!confirmDelete) return;
-  } else if (!confirm(`Deseja realmente excluir o time '${team.name}'?`)) {
-    return;
-  }
-
-  await api(`/teams/${team.id}`, { method: "DELETE" });
-  closeModal(modalManageTeams);
-  await refreshTeams();
-}
+// Removed - now handled by deleteTeam function in renderTeamsList
 
 async function createRetroAndOpen() {
   const team = getCurrentTeam();
@@ -309,7 +410,7 @@ function setupEvents() {
 
   // Actions
   document.getElementById("createTeamBtn").addEventListener("click", createTeam);
-  document.getElementById("deleteCurrentTeamBtn").addEventListener("click", deleteCurrentTeam);
+  // Removed - delete functionality now handled per-team in the teams list
   document.getElementById("createRetroBtn").addEventListener("click", createRetroAndOpen);
   
   // Tabs

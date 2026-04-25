@@ -40,7 +40,7 @@
               <label for="teamSelect">Selecione o Time:</label>
               <select id="teamSelect"></select>
             </div>
-            <button class="ghost small" id="btnManageTeams">⚙️ Gerenciar Times</button>
+            <button class="ghost small" id="btnManageTeams">⚙️ Gerenciar Times da Equipe</button>
           </div>
 
           <!-- View: Dashboard (Retros) -->
@@ -92,21 +92,36 @@
       </div>
     </div>
 
-    <div id="modalManageTeams" class="modal hidden">
-      <div class="modal-content panel">
-        <h2>Gerenciar Times</h2>
-        <div class="team-create">
-          <input id="teamName" type="text" placeholder="Novo time (ex: Squad Payments)" maxlength="40" />
-          <button class="primary" id="createTeamBtn">Criar</button>
-        </div>
-        <hr />
-        <p class="hint">Time atual selecionado não pode ser excluído por aqui. Mude no select principal.</p>
-        <button class="ghost danger" id="deleteCurrentTeamBtn">Excluir time atual</button>
-        <div class="modal-actions" style="margin-top: 1rem;">
-          <button class="ghost" id="closeTeamsModalBtn">Fechar</button>
-        </div>
+<div id="modalManageTeams" class="modal hidden">
+  <div class="modal-content panel">
+    <h2>Gerenciar Times</h2>
+    
+    <!-- Seção para criar novo time -->
+    <section class="team-create-section">
+      <h3>Criar Novo Time</h3>
+      <div class="team-create">
+        <input id="teamName" type="text" placeholder="Nome do novo time (ex: Squad Payments)" maxlength="40" />
+        <button class="primary" id="createTeamBtn">Criar Time</button>
       </div>
+      <p class="hint" id="teamCreateHint"></p>
+    </section>
+    
+    <hr />
+    
+    <!-- Seção para gerenciar times existentes -->
+    <section class="team-manage-section">
+      <h3>Times Existentes</h3>
+      <div id="teamsList">
+        <!-- Times serão inseridos aqui via JavaScript -->
+        <p class="text-muted">Carregando times...</p>
+      </div>
+    </section>
+    
+    <div class="modal-actions" style="margin-top: 1.5rem;">
+      <button class="ghost" id="closeTeamsModalBtn">Fechar</button>
     </div>
+  </div>
+</div>
 
     <script src="theme.js"></script>
     <script src="index.js"></script>

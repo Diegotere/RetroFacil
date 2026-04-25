@@ -684,10 +684,120 @@ select {
 }
 
 .modal-content {
-  width: 100%;
-  max-width: 500px;
   background: var(--panel-bg);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+/* Styles for team management section */
+.team-create-section,
+.team-manage-section {
+  margin-bottom: 1.5rem;
+}
+
+.team-create-section h3,
+.team-manage-section h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: var(--text);
+  font-size: 1.1rem;
+}
+
+#teamsList {
+  min-height: 120px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--input-bg);
+}
+
+.team-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.team-item:last-child {
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+.team-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.team-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.team-details {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.team-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-edit,
+.btn-delete {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background-color 0.2s;
+}
+
+.btn-edit {
+  background: rgba(90, 79, 243, 0.1);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.btn-edit:hover {
+  background: rgba(90, 79, 243, 0.2);
+}
+
+.btn-delete {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.btn-delete:hover {
+  background: rgba(220, 38, 38, 0.2);
+}
+
+/* Dark mode adjustments */
+:root.dark .team-item {
+  background: var(--card);
+  border-color: var(--border);
+}
+
+:root.dark .team-name {
+  color: var(--text);
+}
+
+:root.dark .team-details {
+  color: var(--muted);
 }
 
 .modal-actions {
