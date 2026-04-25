@@ -78,6 +78,7 @@ async function api(path, options = {}) {
 }
 
 function getCurrentTeam() {
+  if (!state.teams || state.teams.length === 0) return null;
   return state.teams.find((team) => team.id === state.currentTeamId) || state.teams[0];
 }
 
@@ -142,6 +143,10 @@ async function deleteCurrentTeam() {
 
 async function createRetroAndOpen() {
   const team = getCurrentTeam();
+  if (!team) {
+    alert("Você precisa criar um time antes de iniciar uma retrospectiva.");
+    return;
+  }
   const title = retroTitleInput.value.trim() || "Retrospectiva";
   try {
     const created = await api("/retros", {
@@ -253,7 +258,13 @@ function renderRetroList() {
 
 async function renderReports() {
   const team = getCurrentTeam();
-  if (!team) return;
+  if (!team) {
+    reportSummary.textContent = "Crie um time para ver relatórios.";
+    topSituations.innerHTML = "<li>Nenhum time selecionado.</li>";
+    wordCloud.textContent = "-";
+    monthList.innerHTML = "<li>-</li>";
+    return;
+  }
 
   const report = await api(`/reports/${team.id}`);
   reportSummary.textContent = `${team.name}: ${report.retroCount} retrospectiva(s) salvas.`;
