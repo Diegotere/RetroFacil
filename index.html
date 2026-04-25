@@ -7,74 +7,107 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="hero">
-      <nav class="nav">
+    <div class="dashboard-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
         <div class="brand">
           <span class="logo">⏪</span>
           <span>RetroFácil</span>
         </div>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-          <button class="ghost small" id="themeToggle">🌙 Modo Escuro</button>
+        <nav class="sidebar-nav">
+          <button class="nav-item active" id="navDashboard">📊 Dashboard</button>
+          <button class="nav-item" id="navReports">📈 Relatórios</button>
+        </nav>
+        <div class="sidebar-footer">
+          <button class="ghost small" id="themeToggle">🌙 Tema</button>
           <button class="ghost danger small" id="logoutBtn">Sair</button>
         </div>
-      </nav>
-      <section class="hero-content">
-        <h1>Painel de Times e Retrospectivas</h1>
-        <p>
-          Crie times, acompanhe histórico mensal e abra retrospectivas em páginas
-          dedicadas com link compartilhável para colaboradores.
-        </p>
-      </section>
-    </header>
+      </aside>
 
-    <main>
-      <section class="workspace">
-        <article class="panel">
-          <h2>Configuração de Times</h2>
-          <p class="hint">Crie e selecione times para separar histórico e indicadores.</p>
+      <!-- Main Content -->
+      <main class="dashboard-main">
+        <header class="dashboard-header">
+          <div>
+            <h1>Dashboard</h1>
+            <p class="text-muted">Acompanhe e gerencie suas retrospectivas.</p>
+          </div>
+          <button class="primary" id="btnNovaRetro">+ Nova Retrospectiva</button>
+        </header>
 
-          <div class="team-create">
-            <input id="teamName" type="text" placeholder="Novo time (ex: Squad Payments)" maxlength="40" />
-            <button class="primary" id="createTeam">Criar time</button>
+        <div class="dashboard-content">
+          <!-- Area for Team selection -->
+          <div class="top-controls">
+            <div class="team-selector-box">
+              <label for="teamSelect">Selecione o Time:</label>
+              <select id="teamSelect"></select>
+            </div>
+            <button class="ghost small" id="btnManageTeams">⚙️ Gerenciar Times</button>
           </div>
 
-          <label class="field">
-            <span>Time atual</span>
-            <select id="teamSelect"></select>
-          </label>
-
-          <div class="stack-actions">
-            <button class="ghost danger" id="deleteTeam">Excluir time selecionado</button>
+          <!-- View: Dashboard (Retros) -->
+          <div id="viewDashboard" class="view-section">
+            <div class="tabs">
+              <button class="tab active" data-tab="ongoing">Em Andamento</button>
+              <button class="tab" data-tab="completed">Finalizadas</button>
+            </div>
+            
+            <div class="retro-grid" id="retroGrid">
+              <!-- Retro cards will be injected here -->
+            </div>
           </div>
 
-          <label class="field">
-            <span>Título da nova retrospectiva</span>
-            <input id="retroTitle" type="text" maxlength="60" value="Sprint - Retrospectiva" />
-          </label>
+          <!-- View: Reports -->
+          <div id="viewReports" class="view-section hidden">
+            <div class="workspace">
+              <article class="panel reports">
+                <h2>Relatórios por Time</h2>
+                <p class="hint" id="reportSummary">Sem dados para o time selecionado.</p>
 
-          <div class="stack-actions">
-            <button class="primary" id="createRetro">Criar nova retro (abrir página)</button>
+                <h3>Top situações mais votadas</h3>
+                <ol id="topSituations" class="rank-list"></ol>
+
+                <h3>Nuvem de palavras recorrentes</h3>
+                <div id="wordCloud" class="word-cloud"></div>
+
+                <h3>Retros por mês</h3>
+                <ul id="monthList" class="month-list"></ul>
+              </article>
+            </div>
           </div>
+        </div>
+      </main>
+    </div>
 
-          <h3>Retros deste time</h3>
-          <ul id="retroList" class="retro-list"></ul>
-        </article>
+    <!-- Modals -->
+    <div id="modalNewRetro" class="modal hidden">
+      <div class="modal-content panel">
+        <h2>Nova Retrospectiva</h2>
+        <label class="field">
+          <span>Título da Retro</span>
+          <input id="retroTitle" type="text" maxlength="60" value="Sprint - Retrospectiva" />
+        </label>
+        <div class="modal-actions">
+          <button class="ghost" id="cancelRetroBtn">Cancelar</button>
+          <button class="primary" id="createRetroBtn">Criar Retro</button>
+        </div>
+      </div>
+    </div>
 
-        <article class="panel reports">
-          <h2>Relatórios por Time</h2>
-          <p class="hint" id="reportSummary">Sem dados para o time selecionado.</p>
-
-          <h3>Top situações mais votadas</h3>
-          <ol id="topSituations" class="rank-list"></ol>
-
-          <h3>Nuvem de palavras recorrentes</h3>
-          <div id="wordCloud" class="word-cloud"></div>
-
-          <h3>Retros por mês</h3>
-          <ul id="monthList" class="month-list"></ul>
-        </article>
-      </section>
-    </main>
+    <div id="modalManageTeams" class="modal hidden">
+      <div class="modal-content panel">
+        <h2>Gerenciar Times</h2>
+        <div class="team-create">
+          <input id="teamName" type="text" placeholder="Novo time (ex: Squad Payments)" maxlength="40" />
+          <button class="primary" id="createTeamBtn">Criar</button>
+        </div>
+        <hr />
+        <p class="hint">Time atual selecionado não pode ser excluído por aqui. Mude no select principal.</p>
+        <button class="ghost danger" id="deleteCurrentTeamBtn">Excluir time atual</button>
+        <div class="modal-actions" style="margin-top: 1rem;">
+          <button class="ghost" id="closeTeamsModalBtn">Fechar</button>
+        </div>
+      </div>
+    </div>
 
     <script src="theme.js"></script>
     <script src="index.js"></script>

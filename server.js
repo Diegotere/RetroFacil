@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS retros (
   id TEXT PRIMARY KEY,
   team_id TEXT NOT NULL,
   title TEXT NOT NULL,
+  status TEXT DEFAULT 'ongoing',
   creator_session_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -69,6 +70,13 @@ CREATE TABLE IF NOT EXISTS cards (
 // Tenta adicionar a coluna user_id se ela ainda não existir na tabela antiga
 try {
   await db.exec("ALTER TABLE cards ADD COLUMN user_id TEXT;");
+} catch (e) {
+  // Ignora se a coluna já existir
+}
+
+// Tenta adicionar a coluna status na tabela retros se não existir
+try {
+  await db.exec("ALTER TABLE retros ADD COLUMN status TEXT DEFAULT 'ongoing';");
 } catch (e) {
   // Ignora se a coluna já existir
 }
@@ -196,7 +204,7 @@ async function getTeams() {
   const teams = await db.all("SELECT id, name FROM teams ORDER BY name ASC");
   for (const team of teams) {
     team.retros = await db.all(
-      `SELECT r.id, r.title, r.created_at AS date, r.updated_at AS updatedAt,
+      `SELECT r.id, r.title, r.status, r.created_at AS date, r.updated_at AS updatedAt,
               (SELECT COUNT(1) FROM cards c WHERE c.retro_id = r.id) AS cardCount
        FROM retros r WHERE r.team_id = ? ORDER BY r.created_at DESC`, team.id
     );
@@ -235,8 +243,8 @@ app.post("/api/retros", authenticateToken, async (req, res) => {
   const id = createId();
   const now = new Date().toISOString();
   await db.run(
-    "INSERT INTO retros (id, team_id, title, creator_session_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-    id, teamId, title, req.user.id, now, now
+    "INSERT INTO retros (id, team_id, title, status, creator_session_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    id, teamId, title, 'ongoing', req.user.id, now, now
   );
 
   for (const [index, column] of defaultColumns.entries()) {
@@ -251,6 +259,23 @@ app.post("/api/retros", authenticateToken, async (req, res) => {
 
 app.delete("/api/retros/:retroId", authenticateToken, async (req, res) => {
   await db.run("DELETE FROM retros WHERE id = ?", req.params.retroId);
+  res.status(204).end();
+});
+
+app.put("/api/retros/:retroId/status", authenticateToken, async (req, res) => {
+  const { status } = req.body || {};
+  if (!status || !['ongoing', 'completed'].includes(status)) {
+    return res.status(400).json({ error: "Status inválido" });
+  }
+
+  const retro = await db.get("SELECT creator_session_id FROM retros WHERE id = ?", req.params.retroId);
+  if (!retro) return res.status(404).json({ error: "Retro não encontrada" });
+
+  if (retro.creator_session_id !== req.user.id) {
+     return res.status(403).json({ error: "Apenas o criador pode alterar o status" });
+  }
+
+  await db.run("UPDATE retros SET status = ?, updated_at = ? WHERE id = ?", status, new Date().toISOString(), req.params.retroId);
   res.status(204).end();
 });
 

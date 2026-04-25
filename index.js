@@ -5,18 +5,30 @@ if (!token) {
 
 const SESSION_KEY = "retrofacil_session_id";
 
-const teamNameInput = document.getElementById("teamName");
+// DOM Elements
 const teamSelect = document.getElementById("teamSelect");
-const retroTitleInput = document.getElementById("retroTitle");
-const retroList = document.getElementById("retroList");
+const retroGrid = document.getElementById("retroGrid");
 const reportSummary = document.getElementById("reportSummary");
 const topSituations = document.getElementById("topSituations");
 const wordCloud = document.getElementById("wordCloud");
 const monthList = document.getElementById("monthList");
 
+// Navigation
+const navDashboard = document.getElementById("navDashboard");
+const navReports = document.getElementById("navReports");
+const viewDashboard = document.getElementById("viewDashboard");
+const viewReports = document.getElementById("viewReports");
+
+// Modals
+const modalNewRetro = document.getElementById("modalNewRetro");
+const modalManageTeams = document.getElementById("modalManageTeams");
+const retroTitleInput = document.getElementById("retroTitle");
+const teamNameInput = document.getElementById("teamName");
+
 const state = {
   teams: [],
   currentTeamId: null,
+  activeTab: 'ongoing' // 'ongoing' | 'completed'
 };
 
 function createId() {
@@ -96,19 +108,20 @@ async function createTeam() {
   try {
     const created = await api("/teams", { method: "POST", body: JSON.stringify({ name }) });
     teamNameInput.value = "";
+    closeModal(modalManageTeams);
     await refreshTeams(created.id);
   } catch (error) {
     alert(error.message);
   }
 }
 
-async function deleteSelectedTeam() {
+async function deleteCurrentTeam() {
   const team = getCurrentTeam();
   if (!team) return;
 
   if ((team.retros || []).length > 0) {
     const confirmDelete = confirm(
-      `O time '${team.name}' possui retrospectivas cadastradas. Se você continuar, todas as retros deste time serão excluídas. Deseja continuar?`
+      `O time '${team.name}' possui retrospectivas. Todas serão excluídas. Deseja continuar?`
     );
     if (!confirmDelete) return;
   } else if (!confirm(`Deseja realmente excluir o time '${team.name}'?`)) {
@@ -116,18 +129,35 @@ async function deleteSelectedTeam() {
   }
 
   await api(`/teams/${team.id}`, { method: "DELETE" });
+  closeModal(modalManageTeams);
   await refreshTeams();
 }
 
 async function createRetroAndOpen() {
   const team = getCurrentTeam();
   const title = retroTitleInput.value.trim() || "Retrospectiva";
-  const created = await api("/retros", {
-    method: "POST",
-    body: JSON.stringify({ teamId: team.id, title, creatorSessionId: getSessionId() }),
-  });
+  try {
+    const created = await api("/retros", {
+      method: "POST",
+      body: JSON.stringify({ teamId: team.id, title, creatorSessionId: getSessionId() }),
+    });
+    window.location.href = `retro.html?retro=${encodeURIComponent(created.id)}`;
+  } catch(e) {
+    alert(e.message);
+  }
+}
 
-  window.location.href = `retro.html?retro=${encodeURIComponent(created.id)}`;
+async function updateRetroStatus(retroId, newStatus) {
+  const team = getCurrentTeam();
+  try {
+    await api(`/retros/${retroId}/status`, { 
+      method: "PUT",
+      body: JSON.stringify({ status: newStatus })
+    });
+    await refreshTeams(team.id);
+  } catch(e) {
+    alert("Erro ao alterar status: " + e.message);
+  }
 }
 
 async function deleteRetro(retroId) {
@@ -143,36 +173,74 @@ async function deleteRetro(retroId) {
 
 function renderRetroList() {
   const team = getCurrentTeam();
-  const retros = [...(team?.retros || [])].sort((a, b) => b.date.localeCompare(a.date));
-  retroList.innerHTML = "";
+  if (!team) return;
 
-  if (!retros.length) {
-    retroList.innerHTML = "<li>Nenhuma retrospectiva criada para este time.</li>";
+  const allRetros = team.retros || [];
+  
+  // Retro compatibility: Se não tiver status, assume 'ongoing'
+  const filteredRetros = allRetros.filter(r => (r.status || 'ongoing') === state.activeTab)
+                                  .sort((a, b) => b.date.localeCompare(a.date));
+
+  retroGrid.innerHTML = "";
+
+  if (!filteredRetros.length) {
+    retroGrid.innerHTML = `<p class="text-muted" style="grid-column: 1/-1;">Nenhuma retrospectiva ${state.activeTab === 'ongoing' ? 'em andamento' : 'finalizada'} encontrada.</p>`;
     return;
   }
 
-  retros.forEach((retro) => {
-    const li = document.createElement("li");
+  filteredRetros.forEach((retro) => {
+    const card = document.createElement('div');
+    card.className = 'retro-card';
+    
+    const isOngoing = (retro.status || 'ongoing') === 'ongoing';
+    const badgeHtml = isOngoing 
+      ? `<span class="badge ongoing">Em Andamento</span>` 
+      : `<span class="badge completed">Finalizada</span>`;
 
-    const text = document.createElement("span");
-    text.textContent = `${retro.title} — ${retro.date.slice(0, 10)} (${retro.cardCount || 0} cartões)`;
+    card.innerHTML = `
+      <div class="retro-card-header">
+        <div>
+          <h3 class="retro-card-title">${retro.title}</h3>
+          <span class="retro-card-date">Criada em ${retro.date.slice(0, 10)}</span>
+        </div>
+        ${badgeHtml}
+      </div>
+      <div class="retro-card-body">
+        <span>📄 ${retro.cardCount || 0} cartões</span>
+      </div>
+      <div class="retro-card-actions"></div>
+    `;
 
-    const actions = document.createElement("div");
-    actions.className = "retro-actions";
+    const actionsDiv = card.querySelector('.retro-card-actions');
 
-    const openLink = document.createElement("a");
-    openLink.className = "link-btn ghost";
-    openLink.href = `retro.html?retro=${encodeURIComponent(retro.id)}`;
-    openLink.textContent = "Abrir sala";
+    const openBtn = document.createElement("a");
+    openBtn.className = "link-btn ghost primary";
+    openBtn.href = `retro.html?retro=${encodeURIComponent(retro.id)}`;
+    openBtn.textContent = isOngoing ? "Acessar" : "Visualizar";
+    actionsDiv.appendChild(openBtn);
 
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "ghost danger";
-    deleteButton.textContent = "Excluir retro";
-    deleteButton.addEventListener("click", () => deleteRetro(retro.id));
+    if (isOngoing) {
+      const finishBtn = document.createElement("button");
+      finishBtn.className = "ghost success";
+      finishBtn.style.color = "var(--success)";
+      finishBtn.textContent = "Finalizar";
+      finishBtn.onclick = () => updateRetroStatus(retro.id, 'completed');
+      actionsDiv.appendChild(finishBtn);
+    } else {
+      const reopenBtn = document.createElement("button");
+      reopenBtn.className = "ghost";
+      reopenBtn.textContent = "Reabrir";
+      reopenBtn.onclick = () => updateRetroStatus(retro.id, 'ongoing');
+      actionsDiv.appendChild(reopenBtn);
+    }
 
-    actions.append(openLink, deleteButton);
-    li.append(text, actions);
-    retroList.appendChild(li);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "ghost danger";
+    deleteBtn.textContent = "Excluir";
+    deleteBtn.onclick = () => deleteRetro(retro.id);
+    actionsDiv.appendChild(deleteBtn);
+
+    retroGrid.appendChild(card);
   });
 }
 
@@ -206,11 +274,52 @@ async function renderReports() {
     : "<li>Sem retrospectivas salvas.</li>";
 }
 
+function openModal(modal) {
+  modal.classList.remove('hidden');
+}
+
+function closeModal(modal) {
+  modal.classList.add('hidden');
+}
+
 function setupEvents() {
-  document.getElementById("createTeam").addEventListener("click", createTeam);
-  document.getElementById("deleteTeam").addEventListener("click", deleteSelectedTeam);
-  document.getElementById("createRetro").addEventListener("click", createRetroAndOpen);
+  // Modals
+  document.getElementById("btnNovaRetro").addEventListener("click", () => openModal(modalNewRetro));
+  document.getElementById("cancelRetroBtn").addEventListener("click", () => closeModal(modalNewRetro));
+  document.getElementById("btnManageTeams").addEventListener("click", () => openModal(modalManageTeams));
+  document.getElementById("closeTeamsModalBtn").addEventListener("click", () => closeModal(modalManageTeams));
+
+  // Actions
+  document.getElementById("createTeamBtn").addEventListener("click", createTeam);
+  document.getElementById("deleteCurrentTeamBtn").addEventListener("click", deleteCurrentTeam);
+  document.getElementById("createRetroBtn").addEventListener("click", createRetroAndOpen);
   
+  // Tabs
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', (e) => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      e.target.classList.add('active');
+      state.activeTab = e.target.dataset.tab;
+      renderRetroList();
+    });
+  });
+
+  // Nav Views
+  navDashboard.addEventListener("click", () => {
+    navDashboard.classList.add("active");
+    navReports.classList.remove("active");
+    viewDashboard.classList.remove("hidden");
+    viewReports.classList.add("hidden");
+  });
+
+  navReports.addEventListener("click", () => {
+    navReports.classList.add("active");
+    navDashboard.classList.remove("active");
+    viewReports.classList.remove("hidden");
+    viewDashboard.classList.add("hidden");
+  });
+
+  // Logout
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", () => {
