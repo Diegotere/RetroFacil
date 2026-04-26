@@ -35,7 +35,29 @@ const teamNameInput = document.getElementById("teamName");
 const state = {
   teams: [],
   currentTeamId: null,
-  activeTab: 'ongoing' // 'ongoing' | 'completed'
+  activeTab: 'ongoing', // 'ongoing' | 'completed'
+  wizard: {
+    currentStep: 1,
+    selectedTemplate: 'glad_sad_mad',
+    columns: [
+      { id: 'glad', name: '😀 Contente' },
+      { id: 'sad', name: '😢 Triste' },
+      { id: 'mad', name: '😠 Irritado' }
+    ]
+  }
+};
+
+const templates = {
+  glad_sad_mad: [
+    { id: 'glad', name: '😀 Contente' },
+    { id: 'sad', name: '😢 Triste' },
+    { id: 'mad', name: '😠 Irritado' }
+  ],
+  start_stop_continue: [
+    { id: 'start', name: '▶️ Começar' },
+    { id: 'stop', name: '⏹️ Parar' },
+    { id: 'continue', name: '➡️ Continuar' }
+  ]
 };
 
 function createId() {
@@ -227,6 +249,17 @@ async function createTeam() {
     return;
   }
 
+  // Verifica se já existe um time com o mesmo nome (case insensitive)
+  const existingTeam = state.teams.find(team => 
+    team.name.toLowerCase() === name.toLowerCase()
+  );
+
+  if (existingTeam) {
+    document.getElementById('teamCreateHint').textContent = `Já existe um time com o nome '${name}'. Por favor, escolha outro nome.`;
+    document.getElementById('teamCreateHint').style.color = 'var(--danger)';
+    return;
+  }
+
   try {
     const created = await api("/teams", { method: "POST", body: JSON.stringify({ name }) });
     teamNameInput.value = "";
@@ -243,21 +276,140 @@ async function createTeam() {
 // Removed - now handled by deleteTeam function in renderTeamsList
 
 async function createRetroAndOpen() {
-  const team = getCurrentTeam();
-  if (!team) {
-    alert("Você precisa criar um time antes de iniciar uma retrospectiva.");
+  const teamId = document.getElementById("wizardTeamSelect").value;
+  const title = retroTitleInput.value.trim() || "Retrospectiva";
+  
+  if (!teamId) {
+    alert("Por favor, selecione um time.");
     return;
   }
-  const title = retroTitleInput.value.trim() || "Retrospectiva";
+
   try {
     const created = await api("/retros", {
       method: "POST",
-      body: JSON.stringify({ teamId: team.id, title, creatorSessionId: getSessionId() }),
+      body: JSON.stringify({ 
+        teamId, 
+        title, 
+        columns: state.wizard.columns.map(c => ({ name: c.name })),
+        creatorSessionId: getSessionId() 
+      }),
     });
     window.location.href = `retro.html?retro=${encodeURIComponent(created.id)}`;
   } catch(e) {
     alert(e.message);
   }
+}
+
+function updateWizardStep(step) {
+  state.wizard.currentStep = step;
+  
+  // Update Indicators
+  document.querySelectorAll('.wizard-step').forEach(el => {
+    const s = parseInt(el.dataset.step);
+    el.classList.toggle('active', s === step);
+    el.classList.toggle('completed', s < step);
+  });
+
+  // Update Content
+  document.querySelectorAll('.wizard-content').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.step) === step);
+  });
+
+  // Update Footer Buttons
+  const prevBtn = document.getElementById("wizardPrevBtn");
+  const nextBtn = document.getElementById("wizardNextBtn");
+  const finishBtn = document.getElementById("finishWizardBtn");
+
+  prevBtn.style.visibility = step === 1 ? "hidden" : "visible";
+  
+  if (step === 3) {
+    nextBtn.classList.add('hidden');
+    finishBtn.classList.remove('hidden');
+    
+    // Set invite link
+    const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
+    document.getElementById("retroLinkDisplay").value = `${baseUrl}retro.html?retro=TEMP_ID`;
+  } else {
+    nextBtn.classList.remove('hidden');
+    finishBtn.classList.add('hidden');
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderWizardColumns() {
+  const list = document.getElementById("wizardColumnsList");
+  list.innerHTML = "";
+  
+  state.wizard.columns.forEach((col, index) => {
+    const div = document.createElement("div");
+    div.className = "wizard-column-item";
+    div.innerHTML = `
+      <div class="col-dot" style="background: var(--primary);"></div>
+      <input type="text" value="${col.name}" data-index="${index}" placeholder="Nome da coluna" />
+      <button class="ghost small btn-remove-col" data-index="${index}"><i data-lucide="trash-2"></i></button>
+    `;
+    list.appendChild(div);
+  });
+
+  list.querySelectorAll("input").forEach(input => {
+    input.addEventListener("input", (e) => {
+      const idx = e.target.dataset.index;
+      state.wizard.columns[idx].name = e.target.value;
+      renderPreview();
+    });
+  });
+
+  list.querySelectorAll(".btn-remove-col").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const idx = e.currentTarget.dataset.index;
+      state.wizard.columns.splice(idx, 1);
+      renderWizardColumns();
+      renderPreview();
+    });
+  });
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderPreview() {
+  const board = document.getElementById("previewBoard");
+  board.innerHTML = "";
+  
+  state.wizard.columns.forEach(col => {
+    const div = document.createElement("div");
+    div.className = "preview-column";
+    div.innerHTML = `
+      <div class="preview-column-title">${col.name}</div>
+      <div class="preview-card"></div>
+      <div class="preview-card short"></div>
+    `;
+    board.appendChild(div);
+  });
+}
+
+function initWizard() {
+  updateWizardStep(1);
+  
+  // Fill teams in wizard
+  const wizardTeamSelect = document.getElementById("wizardTeamSelect");
+  wizardTeamSelect.innerHTML = state.teams.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+  
+  // Set default template
+  applyTemplate('glad_sad_mad');
+  renderPreview();
+}
+
+function applyTemplate(name) {
+  state.wizard.selectedTemplate = name;
+  state.wizard.columns = JSON.parse(JSON.stringify(templates[name] || []));
+  
+  document.querySelectorAll('.preset-option').forEach(el => {
+    el.classList.toggle('active', el.dataset.template === name);
+  });
+
+  renderWizardColumns();
+  renderPreview();
 }
 
 async function updateRetroStatus(retroId, newStatus) {
@@ -405,15 +557,49 @@ function closeModal(modal) {
 
 function setupEvents() {
   // Modals
-  document.getElementById("btnNovaRetro").addEventListener("click", () => openModal(modalNewRetro));
-  document.getElementById("cancelRetroBtn").addEventListener("click", () => closeModal(modalNewRetro));
+  document.getElementById("btnNovaRetro").addEventListener("click", () => {
+    openModal(modalNewRetro);
+    initWizard();
+  });
+  document.getElementById("cancelWizardBtn").addEventListener("click", () => closeModal(modalNewRetro));
   document.getElementById("btnManageTeams").addEventListener("click", () => openModal(modalManageTeams));
   document.getElementById("closeTeamsModalBtn").addEventListener("click", () => closeModal(modalManageTeams));
+
+  // Wizard Navigation
+  document.getElementById("wizardNextBtn").addEventListener("click", () => {
+    if (state.wizard.currentStep < 3) updateWizardStep(state.wizard.currentStep + 1);
+  });
+  document.getElementById("wizardPrevBtn").addEventListener("click", () => {
+    if (state.wizard.currentStep > 1) updateWizardStep(state.wizard.currentStep - 1);
+  });
+  document.getElementById("finishWizardBtn").addEventListener("click", createRetroAndOpen);
+
+  document.getElementById("templateSelect").addEventListener("change", (e) => {
+    if (e.target.value !== 'custom') {
+      applyTemplate(e.target.value);
+    }
+  });
+
+  document.querySelectorAll('.preset-option').forEach(opt => {
+    opt.addEventListener('click', () => applyTemplate(opt.dataset.template));
+  });
+
+  document.getElementById("addWizardColumnBtn").addEventListener("click", () => {
+    state.wizard.columns.push({ name: "Nova Coluna" });
+    renderWizardColumns();
+    renderPreview();
+  });
+
+  document.getElementById("copyRetroLinkBtn").addEventListener("click", () => {
+    const input = document.getElementById("retroLinkDisplay");
+    input.select();
+    document.execCommand("copy");
+    alert("Link copiado!");
+  });
 
   // Actions
   document.getElementById("createTeamBtn").addEventListener("click", createTeam);
   // Removed - delete functionality now handled per-team in the teams list
-  document.getElementById("createRetroBtn").addEventListener("click", createRetroAndOpen);
   
   // Tabs
   document.querySelectorAll('.tab').forEach(tab => {

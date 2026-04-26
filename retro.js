@@ -15,20 +15,27 @@ const defaultColumns = [
   { id: "col-actions", name: "🚀 Ações" },
 ];
 
-const columnsContainer = document.getElementById("columns");
-const boardTitle = document.getElementById("boardTitle");
-const retroTitleHeading = document.getElementById("retroTitleHeading");
-const teamContext = document.getElementById("teamContext");
-const viewerWelcome = document.getElementById("viewerWelcome");
-const newColumnNameInput = document.getElementById("newColumnName");
-
 const params = new URLSearchParams(window.location.search);
 const retroId = params.get("retro");
 
-let votingMode = false;
-let room = null;
-let isAdmin = false; // true apenas se for o criador da retro
-let ws = null; // WebSocket connection
+let state = {
+  room: null,
+  isAdmin: false,
+  votingMode: false,
+  phase: 'brainstorming',
+  timerSeconds: 600,
+  timerInterval: null,
+  ws: null,
+  participants: []
+};
+
+const columnColors = {
+  0: '#10b981', // Green
+  1: '#f43f5e', // Red
+  2: '#4f46e5', // Indigo
+  3: '#f59e0b', // Amber
+  4: '#8b5cf6'  // Purple
+};
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -81,116 +88,124 @@ function showMissingMessage() {
 // .viewer-only → visível apenas para colaboradores
 function applyRoleVisibility() {
   document.querySelectorAll(".admin-only").forEach(el => {
-    el.style.display = isAdmin ? "" : "none";
+    el.style.display = state.isAdmin ? "" : "none";
   });
-
-  // Botão de login e mensagem para colaboradores
-  if (!isAdmin) {
-    // Mostra o botão de login se o usuário NÃO estiver logado
-    const viewerLoginBtn = document.getElementById("viewerLoginBtn");
-    if (viewerLoginBtn) {
-      if (!token) {
-        viewerLoginBtn.style.display = "";
-      } else {
-        viewerLoginBtn.style.display = "none"; // logado mas não é admin, não mostra de novo
-      }
-    }
-
-    // Mensagem de boas-vindas
-    if (viewerWelcome) {
-      viewerWelcome.style.display = "";
-      const name = currentUser ? ` Olá, ${currentUser.name}!` : "";
-      viewerWelcome.textContent = `${name} Você está colaborando em "${room.title}" do time ${room.team.name}.`;
-    }
-  }
 }
 
 function createBoard() {
-  columnsContainer.innerHTML = "";
-  const columns = room.columns || defaultColumns;
+  const container = document.getElementById("columnsContainer");
+  container.innerHTML = "";
+  const columns = state.room.columns || defaultColumns;
 
-  columns.forEach((columnData) => {
+  columns.forEach((columnData, index) => {
     const template = document.getElementById("columnTemplate");
     const column = template.content.firstElementChild.cloneNode(true);
     column.dataset.columnId = columnData.id;
 
-    const titleInput = column.querySelector(".column-title-input");
-    titleInput.value = columnData.name;
-    titleInput.readOnly = !isAdmin;
+    const titleEl = column.querySelector(".column-title");
+    titleEl.textContent = columnData.name;
+    
+    const dot = column.querySelector(".status-dot");
+    dot.style.background = columnColors[index] || '#cbd5e1';
 
-    if (isAdmin) {
-      titleInput.addEventListener("change", () => {
-        const next = titleInput.value.trim();
-        titleInput.value = next || columnData.name;
-        updateColumnName(columnData.id, titleInput.value);
-      });
-    }
+    column.querySelector(".add-card-btn").addEventListener("click", () => promptAddCard(columnData.id));
+    column.querySelector(".btn-add-card-header").addEventListener("click", () => promptAddCard(columnData.id));
 
-    column.querySelector(".add-card").addEventListener("click", () => {
-      const text = prompt("Digite o cartão:");
-      if (!text || !text.trim()) return;
-      const list = column.querySelector(".card-list");
-      const userId = currentUser ? currentUser.id : null;
-      addCard(list, {
-        id: createId(),
-        text: text.trim(),
-        votes: 0,
-        columnId: columnData.id,
-        userId,
-      });
-      renumberColumn(list);
-      saveBoardToRetro();
-    });
-
-    const removeColumnBtn = column.querySelector(".remove-column");
-    if (removeColumnBtn) {
-      if (isAdmin) {
-        removeColumnBtn.addEventListener("click", () => removeColumn(columnData.id));
-      }
-    }
-
-    columnsContainer.appendChild(column);
+    container.appendChild(column);
   });
 
-  // Após renderizar as colunas, aplica visibilidade dos botões .admin-only dentro delas
-  applyRoleVisibility();
+  if (window.lucide) lucide.createIcons();
 }
 
-function addCard(targetList, card) {
-  const template = document.getElementById("cardTemplate");
-  const item = template.content.firstElementChild.cloneNode(true);
-  item.dataset.cardId = card.id;
-  item.dataset.columnId = card.columnId;
-  item.dataset.userId = card.userId || "";
-  item.querySelector(".card-text").textContent = card.text;
+function promptAddCard(columnId) {
+  const text = prompt("Digite o cartão:");
+  if (!text || !text.trim()) return;
+  
+  const userId = currentUser ? currentUser.id : null;
+  const card = {
+    id: createId(),
+    text: text.trim(),
+    votes: 0,
+    columnId: columnId,
+    userId,
+    hidden: state.phase === 'brainstorming'
+  };
 
-  const removeBtn = item.querySelector(".remove-card");
-  // Pode remover: admin pode tudo; colaborador só pode remover seus próprios cartões
-  const canRemove = isAdmin || (currentUser && item.dataset.userId === currentUser.id);
-  if (!canRemove) {
-    removeBtn.style.display = "none";
-  } else {
-    removeBtn.addEventListener("click", () => {
-      item.remove();
-      renumberColumn(targetList);
-      saveBoardToRetro();
+  if (!state.room.cards) state.room.cards = [];
+  state.room.cards.push(card);
+  
+  saveBoardToRetro();
+  renderCards();
+}
+
+function renderCards() {
+  const columns = document.querySelectorAll(".retro-column");
+  columns.forEach(col => {
+    const list = col.querySelector(".cards-list");
+    list.innerHTML = "";
+    const colId = col.dataset.columnId;
+    const colCards = (state.room.cards || []).filter(c => c.columnId === colId);
+    
+    col.querySelector(".count").textContent = colCards.length;
+
+    if (colCards.length === 0 && (columnData.name.toLowerCase().includes('ação') || columnData.name.toLowerCase().includes('action'))) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.innerHTML = `
+        <i data-lucide="list-checks"></i>
+        <p>Nenhum item de ação ainda.</p>
+        <span class="text-muted" style="font-size: 0.75rem;">Converta cartões em ações ou adicione-os diretamente aqui</span>
+      `;
+      list.appendChild(empty);
+    }
+
+    colCards.forEach(card => {
+      const template = document.getElementById("cardTemplate");
+      const item = template.content.firstElementChild.cloneNode(true);
+      item.dataset.cardId = card.id;
+      
+      const textEl = item.querySelector(".card-text");
+      textEl.textContent = card.text;
+      
+      if (card.hidden && !state.isAdmin) {
+        item.classList.add('hidden-content');
+        textEl.textContent = "Oculto durante escrita";
+      }
+
+      const voteBtn = item.querySelector(".vote-btn");
+      const voteCount = voteBtn.querySelector(".vote-count");
+      voteCount.textContent = card.votes || 0;
+
+      voteBtn.addEventListener("click", () => {
+        if (state.phase === 'brainstorming') return;
+        card.votes = (card.votes || 0) + 1;
+        saveBoardToRetro();
+        renderCards();
+      });
+
+      const hideBtn = item.querySelector(".btn-hide-card");
+      if (state.isAdmin) {
+        hideBtn.addEventListener("click", () => {
+          card.hidden = !card.hidden;
+          saveBoardToRetro();
+          renderCards();
+        });
+      } else {
+        hideBtn.style.display = "none";
+      }
+
+      const avatar = item.querySelector(".author-avatar");
+      if (card.userId) {
+        avatar.src = `https://ui-avatars.com/api/?name=${card.userId}&background=random`;
+      } else {
+        avatar.style.display = "none";
+      }
+
+      list.appendChild(item);
     });
-  }
-
-  const voteBtn = item.querySelector(".vote-btn");
-  const voteCount = voteBtn.querySelector("span");
-  voteCount.textContent = String(card.votes || 0);
-
-  voteBtn.addEventListener("click", () => {
-    // Admin precisa do modo votação; colaboradores podem votar livremente
-    if (isAdmin && !votingMode) return;
-    const hasVoted = voteBtn.classList.toggle("active");
-    const next = Number(voteCount.textContent) + (hasVoted ? 1 : -1);
-    voteCount.textContent = String(Math.max(next, 0));
-    saveBoardToRetro();
   });
 
-  targetList.appendChild(item);
+  if (window.lucide) lucide.createIcons();
 }
 
 function renumberColumn(cardList) {
@@ -214,21 +229,18 @@ function collectCards() {
 }
 
 async function saveBoardToRetro() {
-  if (!room) return;
-  room.cards = collectCards();
-  room.columns = getCurrentColumnsFromDom();
-  await api(`/retros/${room.id}`, {
+  if (!state.room) return;
+  await api(`/retros/${state.room.id}`, {
     method: "PUT",
-    body: JSON.stringify({ columns: room.columns, cards: room.cards }),
+    body: JSON.stringify({ columns: state.room.columns, cards: state.room.cards }),
   });
   
-  // Broadcast the update to all connected clients
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify({
       type: 'board_update',
       data: {
-        columns: room.columns,
-        cards: room.cards
+        columns: state.room.columns,
+        cards: state.room.cards
       }
     }));
   }
@@ -329,137 +341,245 @@ function setupHeaderAndShare() {
   if (shareUrlInput) shareUrlInput.value = window.location.href;
 }
 
+function updatePhase(newPhase) {
+  state.phase = newPhase;
+  document.querySelectorAll('.phase-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.phase === newPhase);
+  });
+
+  if (state.isAdmin) {
+    api(`/retros/${state.room.id}/phase`, {
+      method: "PUT",
+      body: JSON.stringify({ phase: newPhase })
+    });
+  }
+
+  // Auto-reveal cards if moving to Discussion
+  if (newPhase === 'discussion' && state.isAdmin) {
+    state.room.cards.forEach(c => c.hidden = false);
+    saveBoardToRetro();
+  }
+
+  renderCards();
+}
+
+function startTimer(isBroadcast = false) {
+  if (state.timerInterval) clearInterval(state.timerInterval);
+  
+  document.getElementById("btnTimerPlay").classList.add('hidden');
+  document.getElementById("btnTimerPause").classList.remove('hidden');
+  document.getElementById("timerDisplay").readOnly = true;
+
+  state.timerInterval = setInterval(() => {
+    if (state.timerSeconds > 0) {
+      state.timerSeconds--;
+      renderTimer();
+    } else {
+      clearInterval(state.timerInterval);
+      state.timerInterval = null;
+      document.getElementById("timerBox").classList.add('finished');
+      playAlarm();
+      pauseTimer(true); // Switch UI back to play state
+    }
+  }, 1000);
+
+  if (!isBroadcast && state.isAdmin) {
+    broadcastTimerEvent('start');
+  }
+}
+
+function pauseTimer(isBroadcast = false) {
+  if (state.timerInterval) clearInterval(state.timerInterval);
+  state.timerInterval = null;
+
+  document.getElementById("btnTimerPlay").classList.remove('hidden');
+  document.getElementById("btnTimerPause").classList.add('hidden');
+  document.getElementById("timerDisplay").readOnly = !state.isAdmin;
+
+  if (!isBroadcast && state.isAdmin) {
+    broadcastTimerEvent('pause');
+  }
+}
+
+function stopTimer(isBroadcast = false) {
+  if (state.timerInterval) clearInterval(state.timerInterval);
+  state.timerInterval = null;
+  
+  state.timerSeconds = 0;
+  renderTimer();
+  document.getElementById("timerBox").classList.remove('finished');
+
+  document.getElementById("btnTimerPlay").classList.remove('hidden');
+  document.getElementById("btnTimerPause").classList.add('hidden');
+  document.getElementById("timerDisplay").readOnly = !state.isAdmin;
+
+  if (!isBroadcast && state.isAdmin) {
+    broadcastTimerEvent('stop');
+  }
+}
+
+function playAlarm() {
+  const audio = new Audio('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
+  audio.play().catch(e => console.log("Erro ao tocar alarme (browser bloqueou auto-play):", e));
+}
+
+function broadcastTimerEvent(action) {
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify({
+      type: 'timer_control',
+      payload: { action, seconds: state.timerSeconds }
+    }));
+  }
+}
+
+function renderTimer() {
+  const min = Math.floor(state.timerSeconds / 60);
+  const sec = state.timerSeconds % 60;
+  const display = document.getElementById("timerDisplay");
+  display.value = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+function parseTimerInput(val) {
+  const parts = val.split(':');
+  if (parts.length === 2) {
+    const min = parseInt(parts[0]) || 0;
+    const sec = parseInt(parts[1]) || 0;
+    return (min * 60) + sec;
+  }
+  return parseInt(val) || 0;
+}
+
+function exportToCSV() {
+  const cards = state.room.cards || [];
+  const headers = ["Coluna", "Texto", "Votos", "Autor"];
+  const rows = cards.map(c => {
+    const col = state.room.columns.find(col => col.id === c.columnId);
+    return [
+      `"${col ? col.name : ''}"`,
+      `"${c.text.replace(/"/g, '""')}"`,
+      c.votes || 0,
+      `"${c.userId || 'Anônimo'}"`
+    ];
+  });
+
+  const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `retro_${state.room.id}.csv`;
+  link.click();
+}
+
 function setupEvents() {
-  // Apenas configura eventos de elementos que existem e são visíveis para admin
-  const copyLinkBtn = document.getElementById("copyLink");
-  if (copyLinkBtn) copyLinkBtn.addEventListener("click", copyLink);
-
-  const saveRetroBtn = document.getElementById("saveRetro");
-  if (saveRetroBtn) {
-    saveRetroBtn.addEventListener("click", async () => {
-      await saveBoardToRetro();
-      alert("Retrospectiva salva.");
+  document.querySelectorAll('.phase-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!state.isAdmin) return;
+      updatePhase(btn.dataset.phase);
     });
-  }
+  });
 
-  const addColumnBtn = document.getElementById("addColumn");
-  if (addColumnBtn) addColumnBtn.addEventListener("click", addColumn);
-
-  const clearBoardBtn = document.getElementById("clearBoard");
-  if (clearBoardBtn) clearBoardBtn.addEventListener("click", clearBoard);
-
-  const finishRetroBtn = document.getElementById("finishRetro");
-  if (finishRetroBtn) {
-    finishRetroBtn.addEventListener("click", async () => {
-      await saveBoardToRetro();
+  document.getElementById("btnExport").addEventListener("click", exportToCSV);
+  document.getElementById("btnEndSession").addEventListener("click", () => {
+    if (confirm("Encerrar sessão? Todos serão redirecionados.")) {
       window.location.href = "index.html";
-    });
-  }
+    }
+  });
 
-  const viewerLoginBtn = document.getElementById("viewerLoginBtn");
-  if (viewerLoginBtn) {
-    viewerLoginBtn.addEventListener("click", () => {
-      // Redireciona para login passando o ID da retro para retornar após autenticar
-      window.location.href = `login.html?retro=${retroId}`;
-    });
-  }
+  document.getElementById("btnInviteTeam").addEventListener("click", (e) => {
+    e.preventDefault();
+    navigator.clipboard.writeText(window.location.href);
+    alert("Link da sala copiado!");
+  });
 
-  const logoutBtn = document.getElementById("logoutBtn");
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", () => {
-      localStorage.removeItem("retrofacil_token");
-      localStorage.removeItem("retrofacil_user");
-      window.location.href = "login.html";
-    });
-  }
-
-  const startVotingBtn = document.getElementById("startVoting");
-  if (startVotingBtn) {
-    startVotingBtn.addEventListener("click", () => {
-      votingMode = !votingMode;
-      startVotingBtn.textContent = votingMode ? "Encerrar votação" : "Modo votação";
+  // Timer Controls
+  if (state.isAdmin) {
+    document.getElementById("btnTimerPlay").addEventListener("click", () => startTimer());
+    document.getElementById("btnTimerPause").addEventListener("click", () => pauseTimer());
+    document.getElementById("btnTimerStop").addEventListener("click", () => stopTimer());
+    
+    const display = document.getElementById("timerDisplay");
+    display.addEventListener("change", (e) => {
+      state.timerSeconds = parseTimerInput(e.target.value);
+      document.getElementById("timerBox").classList.remove('finished');
+      renderTimer();
+      broadcastTimerEvent('update');
     });
   }
 }
 
 function setupWebSocket() {
-  // Connect to WebSocket server
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${window.location.host}?retro=${retroId}`;
-  console.log('Connecting to WebSocket:', wsUrl);
   
-  ws = new WebSocket(wsUrl);
+  state.ws = new WebSocket(wsUrl);
 
-  ws.onopen = () => {
-    console.log('WebSocket connected for retro:', retroId);
-    // Send a ping to test the connection
-    ws.send(JSON.stringify({ type: 'ping' }));
+  state.ws.onopen = () => {
+    if (currentUser) {
+      state.ws.send(JSON.stringify({
+        type: 'identify',
+        payload: { user: currentUser }
+      }));
+    }
   };
 
-   ws.onmessage = (event) => {
-     console.log('WebSocket message received:', event.data);
-     try {
-       const data = JSON.parse(event.data);
-       if (data.type === 'retro_updated') {
-         console.log('Updating board with data from WebSocket');
-         // Update the board with the received data
-         room = {
-           ...room,
-           id: data.payload.id,
-           title: data.payload.title,
-           creatorSessionId: data.payload.creatorSessionId,
-           date: data.payload.date,
-           updatedAt: data.payload.updatedAt,
-           team: data.payload.team,
-           columns: data.payload.columns,
-           cards: data.payload.cards
-         };
-         
-         // Recreate the board and reload cards
-         createBoard();
-         loadRetroCards();
-         console.log('Board updated successfully');
-       } else if (data.type === 'pong') {
-         console.log('WebSocket ping/pong successful');
-       }
-     } catch (error) {
-       console.error('Error processing WebSocket message:', error);
-     }
-   };
-
-  ws.onclose = (event) => {
-    console.log('WebSocket disconnected for retro:', retroId, 'code:', event.code, 'reason:', event.reason);
-    // Attempt to reconnect after a short delay
-    setTimeout(setupWebSocket, 3000);
+  state.ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'retro_updated' || data.type === 'board_update') {
+        const payload = data.type === 'retro_updated' ? data.payload : data.data;
+        state.room.columns = payload.columns;
+        state.room.cards = payload.cards;
+        renderCards();
+      } else if (data.type === 'phase_updated') {
+        updatePhase(data.payload.phase);
+      } else if (data.type === 'timer_updated') {
+        state.timerSeconds = data.payload.seconds;
+        renderTimer();
+      } else if (data.type === 'timer_control') {
+        const { action, seconds } = data.payload;
+        state.timerSeconds = seconds;
+        renderTimer();
+        if (action === 'start') startTimer(true);
+        if (action === 'pause') pauseTimer(true);
+        if (action === 'stop') stopTimer(true);
+      } else if (data.type === 'participants_update') {
+        state.participants = data.payload.participants;
+        renderParticipants();
+      }
+    } catch (error) {
+      console.error('WebSocket Error:', error);
+    }
   };
 
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-  };
+  state.ws.onclose = () => setTimeout(setupWebSocket, 3000);
 }
 
 async function init() {
   if (!retroId) return showMissingMessage();
 
   try {
-    // Busca a retro — a rota é pública para leitura (colaboradores sem token)
-    room = await api(`/retros/${retroId}`);
+    state.room = await api(`/retros/${retroId}`);
   } catch {
     return showMissingMessage();
   }
 
-  if (!room) return showMissingMessage();
+  if (!state.room) return showMissingMessage();
 
-  // Determina o papel: admin se tiver token E for o criador da retro
-  isAdmin = !!(token && currentUser && room.creatorSessionId === currentUser.id);
+  state.isAdmin = !!(token && currentUser && state.room.creatorSessionId === currentUser.id);
+  state.phase = state.room.phase || 'brainstorming';
+  state.timerSeconds = state.room.timerSeconds || 600;
 
-  setupHeaderAndShare();
-  applyRoleVisibility();
+  document.getElementById("teamName").textContent = state.room.team.name;
+  document.getElementById("retroTitle").textContent = state.room.title;
+
+  const display = document.getElementById("timerDisplay");
+  display.readOnly = !state.isAdmin;
+
   createBoard();
-  loadRetroCards();
+  renderCards();
+  updatePhase(state.phase);
+  renderTimer();
   setupEvents();
-  
-  // Setup WebSocket connection for real-time updates
   setupWebSocket();
 }
 
@@ -467,3 +587,35 @@ init();
 
 
 
+
+function renderParticipants() {
+  const list = document.getElementById("participantsList");
+  const stack = document.getElementById("avatarStack");
+  
+  list.innerHTML = "";
+  stack.innerHTML = "";
+  
+  state.participants.forEach((p, index) => {
+    // Sidebar list
+    const item = document.createElement("div");
+    item.className = "footer-item"; // Reuse style
+    item.style.marginBottom = "0.5rem";
+    item.innerHTML = `<img src="${p.avatar}" style="width: 24px; height: 24px; border-radius: 50%;" /> ${p.name}`;
+    list.appendChild(item);
+    
+    // Header stack
+    if (index < 3) {
+      const img = document.createElement("img");
+      img.src = p.avatar;
+      img.alt = p.name;
+      stack.appendChild(img);
+    }
+  });
+  
+  if (state.participants.length > 3) {
+    const more = document.createElement("div");
+    more.className = "more";
+    more.textContent = `+${state.participants.length - 3}`;
+    stack.appendChild(more);
+  }
+}

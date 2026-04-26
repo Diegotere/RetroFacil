@@ -1,144 +1,281 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RetroFacil</title>
-    <link rel="stylesheet" href="styles.css" />
-    <script src="https://unpkg.com/lucide@latest"></script>
-  </head>
-  <body>
-    <div class="dashboard-layout">
-      <!-- Sidebar -->
-      <aside class="sidebar">
-        <div class="brand">
-          <img src="logo.png" alt="RetroFácil Logo" class="brand-logo" />
-        </div>
-        <nav class="sidebar-nav">
-          <button class="nav-item active" id="navDashboard">
-            <i data-lucide="layout-dashboard"></i> Dashboard
-          </button>
-          <button class="nav-item" id="navReports">
-            <i data-lucide="bar-chart-3"></i> Relatórios
-          </button>
-        </nav>
-        <div class="sidebar-footer">
-          <div class="theme-switch-wrapper">
-            <span class="theme-switch-label">Modo Escuro</span>
-            <label class="switch" for="themeToggle">
-              <input type="checkbox" id="themeToggle" />
-              <span class="slider"></span>
-            </label>
-          </div>
-          <button class="ghost danger small" id="logoutBtn" style="justify-content: center; width: 100%;">Sair</button>
-        </div>
-      </aside>
 
-      <!-- Main Content -->
-      <main class="dashboard-main">
-        <header class="dashboard-header">
-          <div>
-            <h1>Dashboard</h1>
-            <p class="text-muted">Acompanhe e gerencie suas retrospectivas.</p>
-          </div>
-          <button class="primary" id="btnNovaRetro" style="gap: 8px;">
-            <i data-lucide="plus" style="width: 18px; height: 18px;"></i> Nova Retrospectiva
-          </button>
-        </header>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RetroFacil</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
 
-        <div class="dashboard-content">
-          <!-- Area for Team selection -->
-          <div class="top-controls">
-            <div class="team-selector-box">
-              <label for="teamSelect">Selecione o Time:</label>
-              <select id="teamSelect"></select>
+<body>
+  <div class="dashboard-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="logo.png" alt="RetroFácil Logo" class="brand-logo" />
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" id="navDashboard">
+          <i data-lucide="layout-dashboard"></i> Dashboard
+        </button>
+        <button class="nav-item" id="navReports">
+          <i data-lucide="bar-chart-3"></i> Relatórios
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="theme-switch-wrapper">
+          <span class="theme-switch-label">Modo Escuro</span>
+          <label class="switch" for="themeToggle">
+            <input type="checkbox" id="themeToggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <button class="ghost danger small" id="logoutBtn" style="justify-content: center; width: 100%;">Sair</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="dashboard-main">
+      <header class="dashboard-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p class="text-muted">Acompanhe e gerencie suas retrospectivas.</p>
+        </div>
+        <button class="primary" id="btnNovaRetro" style="gap: 8px;">
+          <i data-lucide="plus" style="width: 18px; height: 18px;"></i> Nova Retrospectiva
+        </button>
+      </header>
+
+      <div class="dashboard-content">
+        <!-- Area for Team selection -->
+        <div class="top-controls">
+          <div class="team-selector-box">
+            <label for="teamSelect">Selecione o Time:</label>
+            <select id="teamSelect"></select>
+          </div>
+          <button class="ghost small" id="btnManageTeams" style="gap: 8px; border: none; font-weight: 500;">
+            <i data-lucide="settings" style="width: 16px; height: 16px;"></i> Gerenciar Times
+          </button>
+        </div>
+
+        <!-- View: Dashboard (Retros) -->
+        <div id="viewDashboard" class="view-section">
+          <div class="tabs">
+            <button class="tab active" data-tab="ongoing">Em Andamento</button>
+            <button class="tab" data-tab="completed">Finalizadas</button>
+          </div>
+
+          <div class="retro-grid" id="retroGrid">
+            <!-- Retro cards will be injected here -->
+          </div>
+        </div>
+
+        <!-- View: Reports -->
+        <div id="viewReports" class="view-section hidden">
+          <div class="workspace">
+            <article class="panel reports">
+              <h2>Relatórios por Time</h2>
+              <p class="hint" id="reportSummary">Sem dados para o time selecionado.</p>
+
+              <h3>Top situações mais votadas</h3>
+              <ol id="topSituations" class="rank-list"></ol>
+
+              <h3>Nuvem de palavras recorrentes</h3>
+              <div id="wordCloud" class="word-cloud"></div>
+
+              <h3>Retros por mês</h3>
+              <ul id="monthList" class="month-list"></ul>
+            </article>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <div id="modalNewRetro" class="modal hidden">
+    <div class="modal-content panel wizard-modal">
+      <div class="wizard-header">
+        <h2>Criar Nova Retrospectiva</h2>
+        <div class="wizard-steps">
+          <div class="wizard-step active" data-step="1">
+            <div class="step-icon"><i data-lucide="info"></i></div>
+            <span>1. Detalhes</span>
+          </div>
+          <div class="wizard-line"></div>
+          <div class="wizard-step" data-step="2">
+            <div class="step-icon"><i data-lucide="layout"></i></div>
+            <span>2. Colunas</span>
+          </div>
+          <div class="wizard-line"></div>
+          <div class="wizard-step" data-step="3">
+            <div class="step-icon"><i data-lucide="users"></i></div>
+            <span>3. Convidados</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="wizard-body">
+        <!-- Step 1: Details -->
+        <div class="wizard-content active" data-step="1">
+          <div class="wizard-split">
+            <div class="wizard-form">
+              <label class="field">
+                <span>Nome da Retrospectiva</span>
+                <input id="retroTitle" type="text" maxlength="60" placeholder="Ex: Sprint 24 Retro"
+                  value="Sprint - Retrospectiva" />
+              </label>
+              <label class="field">
+                <span>Selecione o Time</span>
+                <select id="wizardTeamSelect"></select>
+              </label>
+              <label class="field">
+                <span>Escolha um Template</span>
+                <select id="templateSelect">
+                  <option value="glad_sad_mad">Contente, Triste, Irritado</option>
+                  <option value="start_stop_continue">Começar, Parar, Continuar</option>
+                  <option value="custom">Personalizado</option>
+                </select>
+              </label>
             </div>
-            <button class="ghost small" id="btnManageTeams" style="gap: 8px; border: none; font-weight: 500;">
-              <i data-lucide="settings" style="width: 16px; height: 16px;"></i> Gerenciar Times da Equipe
+            <div class="wizard-preview">
+              <h3>Live Preview</h3>
+              <div class="preview-board" id="previewBoard">
+                <!-- Preview columns generated via JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Columns -->
+        <div class="wizard-content" data-step="2">
+          <h3>Configuração de Colunas</h3>
+          <div class="template-presets">
+            <div class="preset-option active" data-template="glad_sad_mad">
+              <div class="preset-icons">
+                <span class="p-icon happy">😊</span>
+                <span class="p-icon sad">😢</span>
+                <span class="p-icon mad">😠</span>
+              </div>
+              <span>Contente, Triste, Irritado</span>
+            </div>
+            <div class="preset-option" data-template="start_stop_continue">
+              <div class="preset-icons">
+                <span class="p-icon start">▶️</span>
+                <span class="p-icon stop">⏹️</span>
+                <span class="p-icon continue">➡️</span>
+              </div>
+              <span>Começar, Parar, Continuar</span>
+            </div>
+          </div>
+
+          <div class="custom-columns-area">
+            <div id="wizardColumnsList" class="wizard-columns-list">
+              <!-- Column inputs generated via JS -->
+            </div>
+            <button class="ghost small" id="addWizardColumnBtn" style="margin-top: 1rem;">
+              <i data-lucide="plus" style="width: 14px; height: 14px; margin-right: 4px;"></i> Adicionar Coluna
             </button>
           </div>
+        </div>
 
-          <!-- View: Dashboard (Retros) -->
-          <div id="viewDashboard" class="view-section">
-            <div class="tabs">
-              <button class="tab active" data-tab="ongoing">Em Andamento</button>
-              <button class="tab" data-tab="completed">Finalizadas</button>
+        <!-- Step 3: Invitations -->
+        <div class="wizard-content" data-step="3">
+          <div class="invitation-center">
+            <i data-lucide="party-popper"
+              style="width: 48px; height: 48px; color: var(--primary); margin-bottom: 1rem;"></i>
+            <h3>Tudo pronto! Convide sua equipe.</h3>
+            <p class="text-muted">Compartilhe o link abaixo para começarem a participar.</p>
+
+            <div class="invite-box">
+              <div class="field">
+                <span>Link de Acesso</span>
+                <div class="input-group">
+                  <input id="retroLinkDisplay" type="text" readonly value="https://retrofacil.com/retro/..." />
+                  <button class="primary" id="copyRetroLinkBtn">Copiar Link</button>
+                </div>
+              </div>
             </div>
-            
-            <div class="retro-grid" id="retroGrid">
-              <!-- Retro cards will be injected here -->
+
+            <div class="field" style="width: 100%; max-width: 400px; margin-bottom: 2rem;">
+              <span>Convidar por E-mail</span>
+              <div class="input-group">
+                <input id="wizardInviteEmail" type="email" placeholder="Digite o e-mail..." />
+                <button class="ghost" id="wizardSendInviteBtn">Adicionar</button>
+              </div>
             </div>
-          </div>
 
-          <!-- View: Reports -->
-          <div id="viewReports" class="view-section hidden">
-            <div class="workspace">
-              <article class="panel reports">
-                <h2>Relatórios por Time</h2>
-                <p class="hint" id="reportSummary">Sem dados para o time selecionado.</p>
-
-                <h3>Top situações mais votadas</h3>
-                <ol id="topSituations" class="rank-list"></ol>
-
-                <h3>Nuvem de palavras recorrentes</h3>
-                <div id="wordCloud" class="word-cloud"></div>
-
-                <h3>Retros por mês</h3>
-                <ul id="monthList" class="month-list"></ul>
-              </article>
+            <div class="members-invited" style="width: 100%; text-align: left;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h4 style="margin: 0; font-size: 0.9rem;">Membros Convidados</h4>
+                <span class="text-muted" style="font-size: 0.8rem;">Selecionando a equipe <i data-lucide="chevron-down"
+                    style="width: 12px; height: 12px;"></i></span>
+              </div>
+              <div class="members-list" style="display: flex; flex-wrap: wrap; gap: 1rem;">
+                <div class="member-chip">
+                  <img src="https://ui-avatars.com/api/?name=Joao+Silva&background=random" alt="Avatar" />
+                  <span>João Silva</span>
+                </div>
+                <div class="member-chip">
+                  <img src="https://ui-avatars.com/api/?name=Maria+Costa&background=random" alt="Avatar" />
+                  <span>Maria Costa</span>
+                </div>
+                <div class="member-chip">
+                  <img src="https://ui-avatars.com/api/?name=U+F&background=random" alt="Avatar" />
+                  <span>Umora Framois</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
 
-    <!-- Modals -->
-    <div id="modalNewRetro" class="modal hidden">
-      <div class="modal-content panel">
-        <h2>Nova Retrospectiva</h2>
-        <label class="field">
-          <span>Título da Retro</span>
-          <input id="retroTitle" type="text" maxlength="60" value="Sprint - Retrospectiva" />
-        </label>
-        <div class="modal-actions">
-          <button class="ghost" id="cancelRetroBtn">Cancelar</button>
-          <button class="primary" id="createRetroBtn">Criar Retro</button>
+      <div class="wizard-footer">
+        <button class="ghost" id="wizardPrevBtn" style="visibility: hidden;">Voltar</button>
+        <div class="wizard-footer-right">
+          <button class="ghost" id="cancelWizardBtn">Cancelar</button>
+          <button class="primary" id="wizardNextBtn">Próximo</button>
+          <button class="primary hidden" id="finishWizardBtn">Iniciar Retrospectiva</button>
         </div>
       </div>
-    </div>
-
-<div id="modalManageTeams" class="modal hidden">
-  <div class="modal-content panel">
-    <h2>Gerenciar Times</h2>
-    
-    <!-- Seção para criar novo time -->
-    <section class="team-create-section">
-      <h3>Criar Novo Time</h3>
-      <div class="team-create">
-        <input id="teamName" type="text" placeholder="Nome do novo time (ex: Squad Payments)" maxlength="40" />
-        <button class="primary" id="createTeamBtn">Criar Time</button>
-      </div>
-      <p class="hint" id="teamCreateHint"></p>
-    </section>
-    
-    <hr />
-    
-    <!-- Seção para gerenciar times existentes -->
-    <section class="team-manage-section">
-      <h3>Times Existentes</h3>
-      <div id="teamsList">
-        <!-- Times serão inseridos aqui via JavaScript -->
-        <p class="text-muted">Carregando times...</p>
-      </div>
-    </section>
-    
-    <div class="modal-actions" style="margin-top: 1.5rem;">
-      <button class="ghost" id="closeTeamsModalBtn">Fechar</button>
     </div>
   </div>
-</div>
 
-    <script src="theme.js"></script>
-    <script src="index.js"></script>
-  </body>
+  <div id="modalManageTeams" class="modal hidden">
+    <div class="modal-content panel">
+      <h2>Gerenciar Times</h2>
+
+      <!-- Seção para criar novo time -->
+      <section class="team-create-section">
+        <h3>Criar Novo Time</h3>
+        <div class="team-create">
+          <input id="teamName" type="text" placeholder="Nome do novo time (ex: Squad Payments)" maxlength="40" />
+          <button class="primary" id="createTeamBtn">Criar Time</button>
+        </div>
+        <p class="hint" id="teamCreateHint"></p>
+      </section>
+
+      <hr />
+
+      <!-- Seção para gerenciar times existentes -->
+      <section class="team-manage-section">
+        <h3>Times Existentes</h3>
+        <div id="teamsList">
+          <!-- Times serão inseridos aqui via JavaScript -->
+          <p class="text-muted">Carregando times...</p>
+        </div>
+      </section>
+
+      <div class="modal-actions" style="margin-top: 1.5rem;">
+        <button class="ghost" id="closeTeamsModalBtn">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="theme.js"></script>
+  <script src="index.js"></script>
+</body>
+
 </html>

@@ -27,6 +27,7 @@ const db = await open({
 // Habilita suporte a chaves estrangeiras (essencial para ON DELETE CASCADE)
 await db.exec("PRAGMA foreign_keys = ON;");
 
+// Create tables if they don't exist with proper schema
 await db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -42,36 +43,130 @@ CREATE TABLE IF NOT EXISTS teams (
   name TEXT NOT NULL,
   creator_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  FOREIGN KEY(creator_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY(creator_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE(name, creator_id)
 );
 CREATE TABLE IF NOT EXISTS retros (
   id TEXT PRIMARY KEY,
   team_id TEXT NOT NULL,
   title TEXT NOT NULL,
   status TEXT DEFAULT 'ongoing',
+  phase TEXT DEFAULT 'brainstorming',
+  timer_seconds INTEGER DEFAULT 600,
   creator_session_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY(team_id) REFERENCES teams(id) ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS retro_columns (
-  id TEXT PRIMARY KEY,
-  retro_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  position INTEGER NOT NULL,
-  FOREIGN KEY(retro_id) REFERENCES retros(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS cards (
-  id TEXT PRIMARY KEY,
-  retro_id TEXT NOT NULL,
-  column_id TEXT NOT NULL,
-  text TEXT NOT NULL,
-  votes INTEGER NOT NULL DEFAULT 0,
-  position INTEGER NOT NULL,
-  user_id TEXT,
-  FOREIGN KEY(retro_id) REFERENCES retros(id) ON DELETE CASCADE
-);
 `);
+
+// Fix teams table schema if needed (update to proper unique constraint)
+try {
+  // Check current table schema
+  const tableInfo = await db.all(`PRAGMA table_info(teams)`);
+  const indexInfo = await db.all(`PRAGMA index_list(teams)`);
+  
+  // Check if we have the old UNIQUE constraint on name only
+  const hasOldUniqueName = indexInfo.some(idx => 
+    idx.origin === 'u' &&  // 'u' means unique index
+    idx.name === 'sqlite_autoindex_teams_2' &&  // This is the auto-generated index on name
+    true
+  );
+  
+  // Check if we have the correct composite unique constraint
+  const hasCorrectUnique = indexInfo.some(idx => 
+    idx.origin === 'u' &&  // 'u' means unique index
+    idx.name === 'sqlite_autoindex_teams_2' && 
+    false // We'll check the columns individually below
+  );
+  
+  // Actually check the columns in the index
+  let hasNameOnlyIndex = false;
+  let hasCompositeIndex = false;
+  
+  for (const idx of indexInfo) {
+    if (idx.origin === 'u') {
+      const idxInfo = await db.all(`PRAGMA index_info(${idx.name})`);
+      const columnNames = idxInfo.map(col => col.name).sort();
+      
+      if (columnNames.length === 1 && columnNames[0] === 'name') {
+        hasNameOnlyIndex = true;
+      }
+      
+      if (columnNames.length === 2 && 
+          columnNames.includes('name') && 
+          columnNames.includes('creator_id')) {
+        hasCompositeIndex = true;
+      }
+    }
+  }
+  
+  if (hasNameOnlyIndex && !hasCompositeIndex) {
+    console.log("[Migrating] Updating teams table to have composite unique constraint (name, creator_id)");
+    
+    // Create new table with correct schema
+    await db.exec(`
+      CREATE TABLE teams_new (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        creator_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(creator_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(name, creator_id)
+      );
+    `);
+    
+    // Copy data from old table to new table
+    // We need to handle potential duplicates - keep the first occurrence
+    await db.exec(`
+      INSERT INTO teams_new (id, name, creator_id, created_at)
+      SELECT id, name, creator_id, created_at
+      FROM teams
+      GROUP BY name, creator_id
+      HAVING COUNT(*) = 1
+      OR id = MIN(id); -- Keep the first ID if there are duplicates
+    `);
+    
+    // Drop old table and rename new table
+    await db.exec(`
+      DROP TABLE teams;
+      ALTER TABLE teams_new RENAME TO teams;
+    `);
+    
+    console.log("[Migration] Successfully updated teams table schema");
+  } else if (!hasNameOnlyIndex && !hasCompositeIndex) {
+    console.log("[Migration] No unique constraints found, adding UNIQUE(name, creator_id)");
+    // Add the unique constraint
+    await db.exec(`
+      CREATE TABLE teams_new (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        creator_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(creator_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(name, creator_id)
+      );
+    `);
+    
+    // Copy data
+    await db.exec(`
+      INSERT INTO teams_new SELECT * FROM teams;
+    `);
+    
+    // Replace table
+    await db.exec(`
+      DROP TABLE teams;
+      ALTER TABLE teams_new RENAME TO teams;
+    `);
+    
+    console.log("[Migration] Added unique constraint to teams table");
+  } else {
+    console.log("[Migration] Teams table schema is already correct");
+  }
+} catch (migrationError) {
+  console.error("[Migration] Error fixing teams table schema:", migrationError);
+  // Continue anyway - the table might be fine as is
+}
 
 // Tenta adicionar a coluna user_id se ela ainda não existir na tabela antiga
 try {
@@ -330,7 +425,8 @@ app.post("/api/teams", authenticateToken, async (req, res) => {
     await db.run("INSERT INTO teams (id, name, creator_id, created_at) VALUES (?, ?, ?, ?)", id, name, req.user.id, new Date().toISOString());
     res.status(201).json({ id, name });
   } catch (err) {
-    res.status(500).json({ error: "Erro ao criar time" });
+    console.error("Erro detalhado ao criar time:", err);
+    res.status(500).json({ error: "Erro ao criar time", details: err.message });
   }
 });
 
@@ -345,7 +441,7 @@ app.delete("/api/teams/:teamId", authenticateToken, async (req, res) => {
 });
 
 app.post("/api/retros", authenticateToken, async (req, res) => {
-  const { teamId, title } = req.body || {};
+  const { teamId, title, columns } = req.body || {};
   if (!teamId || !title) return res.status(400).json({ error: "Dados inválidos" });
 
   const id = createId();
@@ -355,14 +451,45 @@ app.post("/api/retros", authenticateToken, async (req, res) => {
     id, teamId, title, 'ongoing', req.user.id, now, now
   );
 
-  for (const [index, column] of defaultColumns.entries()) {
+  const columnsToCreate = columns && columns.length > 0 ? columns : defaultColumns;
+
+  for (const [index, column] of columnsToCreate.entries()) {
+    const colId = column.id || `${id}-${createId()}`;
     await db.run(
       "INSERT INTO retro_columns (id, retro_id, name, position) VALUES (?, ?, ?, ?)",
-      `${id}-${column.id}`, id, column.name, index
+      colId, id, column.name, index
     );
   }
 
   res.status(201).json({ id });
+});
+
+app.put("/api/retros/:retroId/phase", authenticateToken, async (req, res) => {
+  const { phase } = req.body || {};
+  if (!phase) return res.status(400).json({ error: "Fase inválida" });
+
+  await db.run("UPDATE retros SET phase = ?, updated_at = ? WHERE id = ?", phase, new Date().toISOString(), req.params.retroId);
+  
+  broadcastToRetro(req.params.retroId, {
+    type: 'phase_updated',
+    payload: { phase }
+  });
+
+  res.status(204).end();
+});
+
+app.put("/api/retros/:retroId/timer", authenticateToken, async (req, res) => {
+  const { seconds } = req.body || {};
+  if (seconds === undefined) return res.status(400).json({ error: "Tempo inválido" });
+
+  await db.run("UPDATE retros SET timer_seconds = ?, updated_at = ? WHERE id = ?", seconds, new Date().toISOString(), req.params.retroId);
+  
+  broadcastToRetro(req.params.retroId, {
+    type: 'timer_updated',
+    payload: { seconds }
+  });
+
+  res.status(204).end();
 });
 
 app.delete("/api/retros/:retroId", authenticateToken, async (req, res) => {
@@ -389,7 +516,7 @@ app.put("/api/retros/:retroId/status", authenticateToken, async (req, res) => {
 
 app.get("/api/retros/:retroId", async (req, res) => {
   const retro = await db.get(
-    `SELECT r.id, r.title, r.creator_session_id AS creatorSessionId, r.created_at AS date, r.updated_at AS updatedAt, t.id AS teamId, t.name AS teamName
+    `SELECT r.id, r.title, r.phase, r.timer_seconds, r.creator_session_id AS creatorSessionId, r.created_at AS date, r.updated_at AS updatedAt, t.id AS teamId, t.name AS teamName
      FROM retros r JOIN teams t ON t.id = r.team_id WHERE r.id = ?`, req.params.retroId
   );
 
@@ -401,6 +528,8 @@ app.get("/api/retros/:retroId", async (req, res) => {
   res.json({
     id: retro.id,
     title: retro.title,
+    phase: retro.phase,
+    timerSeconds: retro.timer_seconds,
     creatorSessionId: retro.creatorSessionId,
     date: retro.date,
     updatedAt: retro.updatedAt,
@@ -675,19 +804,61 @@ server.on('upgrade', (request, socket, head) => {
   wss.handleUpgrade(request, socket, head, (ws) => {
     wss.emit('connection', ws, request);
     
-    // Add connection to the retro's connection set
+    ws.retroId = retroId;
+    ws.user = null;
+
     if (!retroConnections.has(retroId)) {
       retroConnections.set(retroId, new Set());
     }
     const connections = retroConnections.get(retroId);
     connections.add(ws);
     
-    // Clean up when connection closes
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message);
+        if (data.type === 'identify') {
+          ws.user = data.payload.user;
+          broadcastParticipants(retroId);
+        }
+        if (data.type === 'timer_control') {
+          broadcastToRetro(retroId, data);
+        }
+      } catch (e) {}
+    });
+
     ws.on('close', () => {
       connections.delete(ws);
       if (connections.size === 0) {
         retroConnections.delete(retroId);
+      } else {
+        broadcastParticipants(retroId);
       }
     });
   });
 });
+
+function broadcastParticipants(retroId) {
+  const connections = retroConnections.get(retroId);
+  if (!connections) return;
+
+  const participants = [];
+  const seenIds = new Set();
+
+  connections.forEach(conn => {
+    if (conn.user) {
+      if (!seenIds.has(conn.user.id)) {
+        participants.push({
+          id: conn.user.id,
+          name: conn.user.name,
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(conn.user.name)}&background=random`
+        });
+        seenIds.add(conn.user.id);
+      }
+    }
+  });
+
+  broadcastToRetro(retroId, {
+    type: 'participants_update',
+    payload: { participants }
+  });
+}

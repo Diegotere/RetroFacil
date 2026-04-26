@@ -7,100 +7,137 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="hero compact">
-      <nav class="nav">
-        <div class="brand">
+    <div class="retro-layout">
+      <!-- Sidebar -->
+      <aside class="retro-sidebar">
+        <div class="brand" style="margin-bottom: 1.5rem;">
           <img src="logo.png" alt="RetroFácil Logo" class="brand-logo" />
         </div>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-          <button class="ghost small" id="themeToggle">🌙 Modo Escuro</button>
-          <!-- Só admins veem o link para o painel e o botão de sair -->
-          <a href="index.html" class="ghost link-btn small admin-only">← Painel</a>
-          <button class="ghost danger small admin-only" id="logoutBtn">Sair</button>
-          <!-- Viewers veem o botão de login para se identificar -->
-          <button class="ghost small viewer-only" id="viewerLoginBtn" style="display:none;">👤 Fazer login</button>
-        </div>
-      </nav>
-      <section class="hero-content compact">
-        <h1 id="retroTitleHeading">Retrospectiva</h1>
-        <p id="teamContext"></p>
-        <!-- Mensagem de boas-vindas para colaboradores -->
-        <p id="viewerWelcome" class="viewer-only hint" style="display:none;"></p>
-      </section>
-    </header>
+        
+        <p class="session-type">Retrospectiva - Sessão Ativa</p>
 
-    <main>
-      <!-- SEÇÃO ADMIN: Compartilhar sala -->
-      <section class="panel share-panel admin-only">
-        <h2>Compartilhar sala</h2>
-        <p class="hint">
-          Envie este endereço para colaboradores acessarem esta retrospectiva e adicionarem cartões anonimamente.
-        </p>
-        <div class="share-row">
-          <input id="shareUrl" type="text" readonly />
-          <button class="primary" id="copyLink">Copiar link</button>
-          <button class="ghost" id="saveRetro">Salvar agora</button>
+        <div class="sidebar-section">
+          <h3>Facilitação</h3>
+          <nav class="phase-nav">
+            <button class="phase-item active" data-phase="brainstorming">
+              <i data-lucide="brain-circuit"></i> Fase: Brainstorming
+            </button>
+            <button class="phase-item" data-phase="voting">
+              <i data-lucide="check-square"></i> Fase: Votação
+            </button>
+            <button class="phase-item" data-phase="discussion">
+              <i data-lucide="message-square"></i> Fase: Discussão
+            </button>
+          </nav>
         </div>
-      </section>
 
-      <!-- SEÇÃO ADMIN: Configurar colunas -->
-      <section class="panel share-panel admin-only" id="columnConfigSection">
-        <h2>Configurar colunas</h2>
-        <p class="hint">Você pode criar, editar e remover colunas deste quadro.</p>
-        <div class="share-row">
-          <input id="newColumnName" type="text" maxlength="30" placeholder="Nome da nova coluna" />
-          <button class="primary" id="addColumn">Adicionar coluna</button>
+        <div class="sidebar-section">
+          <h3>Participantes</h3>
+          <div id="participantsList" class="participants-list">
+            <!-- Participants will be listed here -->
+          </div>
         </div>
-      </section>
 
-      <section class="board" id="retroBoard">
-        <header class="board-header">
-          <h2 id="boardTitle">Retrospectiva</h2>
-          <div class="board-controls">
-            <!-- BOTÃO ADMIN: Limpar quadro -->
-            <button class="ghost admin-only" id="clearBoard">Limpar quadro</button>
+        <div class="sidebar-section">
+          <h3>Atividade</h3>
+          <div id="activityLog" class="activity-log" style="font-size: 0.8rem; color: var(--muted);">
+            <!-- Activity log items -->
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <a href="#" class="footer-item" id="btnInviteTeam">
+            <i data-lucide="user-plus"></i> Convidar Equipe
+          </a>
+          <a href="#" class="footer-item">
+            <i data-lucide="help-circle"></i> Ajuda
+          </a>
+          <a href="index.html" class="footer-item">
+            <i data-lucide="archive"></i> Arquivo
+          </a>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="retro-main">
+        <header class="retro-header">
+          <div class="header-info">
+            <h1>
+              <span id="teamName">Team</span>
+              <span class="text-muted">/</span>
+              <span id="retroTitle" class="session-name">Retro Session</span>
+            </h1>
+          </div>
+
+          <div class="header-actions">
+            <div class="avatar-stack" id="avatarStack">
+              <!-- Avatars generated via JS -->
+            </div>
+
+            <div class="timer-box" id="timerBox">
+              <i data-lucide="timer"></i>
+              <input type="text" id="timerDisplay" value="10:00" class="timer-display-input" />
+              <div class="timer-controls admin-only">
+                <button class="ghost small" id="btnTimerPlay" title="Iniciar"><i data-lucide="play" style="width: 14px;"></i></button>
+                <button class="ghost small hidden" id="btnTimerPause" title="Pausar"><i data-lucide="pause" style="width: 14px;"></i></button>
+                <button class="ghost small" id="btnTimerStop" title="Parar/Resetar"><i data-lucide="square" style="width: 14px;"></i></button>
+              </div>
+            </div>
+
+            <button class="ghost small" id="btnInfo"><i data-lucide="info"></i></button>
+            <button class="ghost" id="btnExport">Exportar</button>
+            <button class="primary" id="btnEndSession">Encerrar Sessão</button>
           </div>
         </header>
 
-        <div class="columns" id="columns"></div>
+        <div class="board-container" id="columnsContainer">
+          <!-- Columns will be injected here -->
+        </div>
+      </main>
+    </div>
 
-        <footer class="board-footer">
-          <!-- BOTÃO ADMIN: Modo votação e Encerrar -->
-          <button class="primary admin-only" id="startVoting">Modo votação</button>
-          <button class="ghost admin-only" id="finishRetro">Encerrar retrospectiva</button>
-        </footer>
-      </section>
-    </main>
-
+    <!-- Templates -->
     <template id="columnTemplate">
-      <article class="column" data-column-id="">
-        <header>
-          <input class="column-title-input" maxlength="30" />
-          <div class="column-actions">
-            <button class="ghost small add-card">+ cartão</button>
-            <!-- BOTÃO ADMIN: remover coluna -->
-            <button class="ghost small remove-column admin-only">🗑</button>
-          </div>
+      <section class="retro-column">
+        <header class="column-header">
+          <div class="status-dot"></div>
+          <h2 class="column-title">Nome da Coluna</h2>
+          <span class="count">0</span>
+          <button class="ghost small btn-add-card-header"><i data-lucide="plus"></i></button>
         </header>
-        <ul class="card-list"></ul>
-      </article>
+        
+        <button class="add-card-btn">
+          <i data-lucide="plus"></i> Adicionar Cartão
+        </button>
+
+        <div class="cards-list"></div>
+      </section>
     </template>
 
     <template id="cardTemplate">
-      <li class="card-item">
-        <div class="card-top">
-          <span class="card-number"></span>
-          <button class="ghost small remove-card" title="remover cartão">×</button>
-        </div>
-        <p class="card-text"></p>
+      <div class="card-item">
+        <p class="card-text">O conteúdo do cartão aparecerá aqui...</p>
         <div class="card-footer">
-          <span class="meta">anônimo</span>
-          <button class="vote-btn" title="votar">👍 <span>0</span></button>
+          <button class="vote-btn ghost small" style="gap: 4px; display: flex; align-items: center;">
+            <i data-lucide="thumbs-up" style="width: 14px;"></i>
+            <span class="vote-count">0</span>
+          </button>
+          <div class="card-actions">
+            <button class="action-btn ghost small btn-hide-card"><i data-lucide="eye-off"></i></button>
+            <img src="" class="author-avatar" style="width: 24px; height: 24px; border-radius: 50%;" />
+          </div>
         </div>
-      </li>
+      </div>
     </template>
 
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="theme.js"></script>
     <script src="retro.js"></script>
+    <script>
+      // Initialize icons after load
+      window.addEventListener('DOMContentLoaded', () => {
+        if (window.lucide) lucide.createIcons();
+      });
+    </script>
   </body>
 </html>
