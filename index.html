@@ -133,11 +133,14 @@
               </label>
               <label class="field">
                 <span>Escolha um Template</span>
-                <select id="templateSelect">
-                  <option value="glad_sad_mad">Contente, Triste, Irritado</option>
-                  <option value="start_stop_continue">Começar, Parar, Continuar</option>
-                  <option value="custom">Personalizado</option>
-                </select>
+                <div class="input-group">
+                  <select id="templateSelect" style="flex: 1;">
+                    <option value="glad_sad_mad">Contente, Triste, Irritado</option>
+                    <option value="start_stop_continue">Começar, Parar, Continuar</option>
+                    <option value="custom">Personalizado</option>
+                  </select>
+                  <button class="ghost" id="btnExploreTemplates" style="white-space: nowrap;">Explorar Modelos</button>
+                </div>
               </label>
             </div>
             <div class="wizard-preview">
@@ -270,6 +273,65 @@
 
       <div class="modal-actions" style="margin-top: 1.5rem;">
         <button class="ghost" id="closeTeamsModalBtn">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Template Selection Modal -->
+  <div id="modalTemplates" class="modal hidden">
+    <div class="modal-content templates-modal">
+      <div class="templates-header">
+        <div class="header-main">
+          <h2>Modelos de Retrospectiva</h2>
+          <p class="text-muted">Escolha um modelo para iniciar sua retrospectiva</p>
+        </div>
+        <button class="ghost small close-modal-btn" onclick="closeModal(modalTemplates)">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="templates-body">
+        <aside class="templates-sidebar">
+          <h3>CATEGORIA</h3>
+          <div id="templateCategories" class="category-list">
+            <!-- Categories injected here -->
+          </div>
+        </aside>
+
+        <main class="templates-list-container">
+          <h3>MODELOS</h3>
+          <div id="templatesListItems" class="model-list">
+            <!-- Models injected here -->
+          </div>
+        </main>
+
+        <section class="template-preview-panel">
+          <div id="templatePreviewContent" class="preview-content">
+            <div class="preview-image-placeholder">
+              <img src="placeholder-retro.png" alt="Preview" id="templatePreviewImage" />
+              <div class="image-overlay" id="templatePreviewTitleOverlay">Começar-Parar-Continuar</div>
+            </div>
+            
+            <div class="preview-details">
+              <ul id="templatePreviewColumns" class="preview-columns-tags">
+                <!-- Column tags -->
+              </ul>
+              <p id="templatePreviewDesc" class="preview-description">
+                Selecione um modelo para ver os detalhes aqui.
+              </p>
+            </div>
+
+            <div class="preview-tip">
+              <i data-lucide="info"></i>
+              <p id="templatePreviewTip">Dica: Use este modelo para times que buscam ações rápidas.</p>
+            </div>
+          </div>
+
+          <div class="preview-actions">
+            <button class="ghost" id="btnModifyTemplate">Modificar Modelo</button>
+            <button class="primary" id="btnConfirmTemplate">Selecionar Modelo</button>
+          </div>
+        </section>
       </div>
     </div>
   </div>

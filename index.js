@@ -45,7 +45,9 @@ const state = {
       { id: 'sad', name: '😢 Triste' },
       { id: 'mad', name: '😠 Irritado' }
     ]
-  }
+  },
+  templates: null,
+  selectedModel: null
 };
 
 const templates = {
@@ -405,7 +407,9 @@ function initWizard() {
 
 function applyTemplate(name) {
   state.wizard.selectedTemplate = name;
-  state.wizard.columns = JSON.parse(JSON.stringify(templates[name] || []));
+  if (templates[name]) {
+    state.wizard.columns = JSON.parse(JSON.stringify(templates[name]));
+  }
   
   document.querySelectorAll('.preset-option').forEach(el => {
     el.classList.toggle('active', el.dataset.template === name);
@@ -413,6 +417,104 @@ function applyTemplate(name) {
 
   renderWizardColumns();
   renderPreview();
+}
+
+async function fetchTemplates() {
+  if (state.templates) return state.templates;
+  const data = await api("/templates");
+  state.templates = data;
+  return data;
+}
+
+const modalTemplates = document.getElementById("modalTemplates");
+
+async function openTemplatesModal() {
+  const allTemplates = await fetchTemplates();
+  renderTemplateCategories(allTemplates);
+  
+  // Select first category by default
+  const firstCat = Object.keys(allTemplates)[0];
+  if (firstCat) selectCategory(firstCat);
+  
+  openModal(modalTemplates);
+}
+
+function renderTemplateCategories(allTemplates) {
+  const container = document.getElementById("templateCategories");
+  container.innerHTML = "";
+  
+  const icons = {
+    "quebra-gelo": "🧊",
+    "dinamica-tradicional": "📋",
+    "dinamica-avancada": "⚡",
+    "acao-e-followup": "🚀"
+  };
+
+  Object.keys(allTemplates).forEach(cat => {
+    const div = document.createElement("div");
+    div.className = "category-item";
+    div.innerHTML = `<span class="category-icon">${icons[cat] || '📁'}</span> ${cat}`;
+    div.onclick = () => selectCategory(cat);
+    container.appendChild(div);
+  });
+}
+
+function selectCategory(cat) {
+  document.querySelectorAll(".category-item").forEach(el => {
+    el.classList.toggle("active", el.textContent.includes(cat));
+  });
+  
+  const models = state.templates[cat];
+  const container = document.getElementById("templatesListItems");
+  container.innerHTML = models.map(m => `
+    <div class="model-item" data-id="${m.id}">${m.name}</div>
+  `).join("");
+
+  container.querySelectorAll(".model-item").forEach(el => {
+    el.onclick = () => selectModel(models.find(m => m.id === el.dataset.id));
+  });
+
+  if (models.length > 0) selectModel(models[0]);
+}
+
+function selectModel(model) {
+  state.selectedModel = model;
+  document.querySelectorAll(".model-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.id === model.id);
+  });
+
+  document.getElementById("templatePreviewTitleOverlay").textContent = model.name;
+  document.getElementById("templatePreviewDesc").textContent = model.description;
+  
+  const imgMap = {
+    "quebra-gelo": "cat_quebra_gelo.png",
+    "dinamica-tradicional": "https://images.unsplash.com/photo-1522071823991-b99c123ad90c?w=800&q=80",
+    "dinamica-avancada": "https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&q=80",
+    "acao-e-followup": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&q=80"
+  };
+  document.getElementById("templatePreviewImage").src = imgMap[model.category] || "placeholder-retro.png";
+
+  const colContainer = document.getElementById("templatePreviewColumns");
+  colContainer.innerHTML = (model.columns || []).map(c => `
+    <li class="column-tag">${c}</li>
+  `).join("");
+
+  const tip = document.getElementById("templatePreviewTip");
+  tip.textContent = `Indicado para: ${model.category}. Tempo sugerido: 30-45 min.`;
+}
+
+function confirmTemplateSelection() {
+  if (!state.selectedModel) return;
+  
+  const model = state.selectedModel;
+  state.wizard.columns = model.columns.map(name => ({ id: createId(), name }));
+  state.wizard.selectedTemplate = 'custom';
+  
+  document.getElementById("templateSelect").value = 'custom';
+  
+  renderWizardColumns();
+  renderPreview();
+  closeModal(modalTemplates);
 }
 
 async function updateRetroStatus(retroId, newStatus) {
@@ -598,6 +700,13 @@ function setupEvents() {
     input.select();
     document.execCommand("copy");
     alert("Link copiado!");
+  });
+
+  document.getElementById("btnExploreTemplates").addEventListener("click", openTemplatesModal);
+  document.getElementById("btnConfirmTemplate").addEventListener("click", confirmTemplateSelection);
+  document.getElementById("btnModifyTemplate").addEventListener("click", () => {
+    confirmTemplateSelection();
+    updateWizardStep(2);
   });
 
   // Actions

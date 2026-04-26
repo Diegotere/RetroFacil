@@ -1723,3 +1723,248 @@ input:checked + .slider:before {
 .timer-box.finished input {
   color: inherit;
 }
+
+/* =========================================
+   TEMPLATE MODAL STYLES
+   ========================================= */
+
+.templates-modal {
+  width: 95%;
+  max-width: 1000px;
+  height: 85vh;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: none;
+  background: var(--card);
+}
+
+.templates-header {
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.templates-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.templates-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.templates-sidebar {
+  width: 220px;
+  border-right: 1px solid var(--border);
+  padding: 1.5rem;
+  background: #fcfcff;
+}
+
+:root.dark .templates-sidebar {
+  background: #1b1b29;
+}
+
+.templates-sidebar h3, .templates-list-container h3 {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 1px;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+}
+
+.category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.category-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  color: var(--text);
+}
+
+.category-item:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.category-item.active {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.templates-list-container {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.model-item {
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+  text-align: left;
+  color: var(--text);
+}
+
+.model-item:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.model-item.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.template-preview-panel {
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+:root.dark .template-preview-panel {
+  background: var(--card);
+}
+
+.preview-content {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.preview-image-placeholder {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  background: #eee;
+}
+
+.preview-image-placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-overlay {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+}
+
+.preview-columns-tags {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.column-tag {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+:root.dark .column-tag {
+  background: #2d2d3f;
+  color: #94a3b8;
+}
+
+.preview-description {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+}
+
+.preview-tip {
+  background: #f0f9ff;
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  color: #0369a1;
+  font-size: 0.85rem;
+}
+
+:root.dark .preview-tip {
+  background: rgba(3, 105, 161, 0.1);
+  color: #7dd3fc;
+}
+
+.preview-actions {
+  padding: 1.5rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 0.75rem;
+}
+
+.preview-actions button {
+  flex: 1;
+}
+
+@media (max-width: 900px) {
+  .templates-body {
+    flex-direction: column;
+  }
+  .templates-sidebar, .template-preview-panel {
+    width: 100%;
+  }
+  .templates-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    height: auto;
+  }
+  .templates-modal {
+    height: 95vh;
+  }
+}

@@ -27,7 +27,9 @@ let state = {
   timerInterval: null,
   ws: null,
   participants: [],
-  isEditingBoard: false
+  isEditingBoard: false,
+  templates: null,
+  selectedModel: null
 };
 
 const columnColors = {
@@ -489,25 +491,53 @@ function parseTimerInput(val) {
   return parseInt(val) || 0;
 }
 
-function exportToCSV() {
+async function exportToPDF() {
+  if (!state.room) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  
+  // Title
+  doc.setFontSize(22);
+  doc.setTextColor(94, 92, 230); // Primary color
+  doc.text("Relatório de Retrospectiva", 14, 20);
+  
+  doc.setFontSize(14);
+  doc.setTextColor(30, 30, 45); // Text color
+  doc.text(state.room.title || "Sem título", 14, 30);
+  
+  doc.setFontSize(10);
+  doc.setTextColor(126, 130, 153); // Muted color
+  const teamName = state.room.team?.name || "N/A";
+  const date = state.room.date ? new Date(state.room.date).toLocaleDateString() : "N/A";
+  doc.text(`Equipe: ${teamName}`, 14, 38);
+  doc.text(`Data: ${date}`, 14, 43);
+  
   const cards = state.room.cards || [];
-  const headers = ["Coluna", "Texto", "Votos", "Autor"];
-  const rows = cards.map(c => {
+  const tableData = cards.map(c => {
     const col = state.room.columns.find(col => col.id === c.columnId);
     return [
-      `"${col ? col.name : ''}"`,
-      `"${c.text.replace(/"/g, '""')}"`,
+      col ? col.name : 'N/A',
+      c.text || "",
       c.votes || 0,
-      `"${c.userId || 'Anônimo'}"`
+      c.userId || 'Anônimo'
     ];
   });
 
-  const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `retro_${state.room.id}.csv`;
-  link.click();
+  doc.autoTable({
+    startY: 50,
+    head: [['Coluna', 'Conteúdo', 'Votos', 'Autor']],
+    body: tableData,
+    headStyles: { fillColor: [94, 92, 230] }, // Primary color
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: 40 },
+      1: { cellWidth: 'auto' },
+      2: { cellWidth: 20, halign: 'center' },
+      3: { cellWidth: 30 }
+    }
+  });
+
+  doc.save(`retro_${state.room.id || 'export'}.pdf`);
 }
 
 function setupEvents() {
@@ -530,7 +560,7 @@ function setupEvents() {
     });
   }
 
-  document.getElementById("btnExport").addEventListener("click", exportToCSV);
+  document.getElementById("btnExport").addEventListener("click", exportToPDF);
   document.getElementById("btnEndSession").addEventListener("click", () => {
     if (confirm("Encerrar sessão? Todos serão redirecionados.")) {
       window.location.href = "index.html";
@@ -555,6 +585,36 @@ function setupEvents() {
       document.getElementById("timerBox").classList.remove('finished');
       renderTimer();
       broadcastTimerEvent('update');
+    });
+  }
+
+  const btnTemplates = document.getElementById("btnOpenTemplates");
+  if (btnTemplates) {
+    btnTemplates.addEventListener("click", openTemplatesModal);
+  }
+
+  const btnCloseTemplates = document.getElementById("btnCloseTemplates");
+  if (btnCloseTemplates) {
+    btnCloseTemplates.addEventListener("click", () => closeModal(document.getElementById("modalTemplates")));
+  }
+
+  const btnConfirmTemplate = document.getElementById("btnConfirmTemplate");
+  if (btnConfirmTemplate) {
+    btnConfirmTemplate.addEventListener("click", applyTemplateToBoard);
+  }
+
+  const btnModifyTemplate = document.getElementById("btnModifyTemplate");
+  if (btnModifyTemplate) {
+    btnModifyTemplate.addEventListener("click", () => {
+      applyTemplateToBoard();
+      state.isEditingBoard = true;
+      const btnEdit = document.getElementById("btnEditBoard");
+      if (btnEdit) {
+        btnEdit.classList.add("primary");
+        btnEdit.classList.remove("ghost");
+      }
+      createBoard();
+      renderCards();
     });
   }
 }
@@ -753,4 +813,116 @@ function handleDrop(e) {
 
 function handleDragEnd() {
   this.classList.remove("dragging");
+}
+
+// === Template Logic ===
+
+async function fetchTemplates() {
+  if (state.templates) return state.templates;
+  const data = await api("/templates");
+  state.templates = data;
+  return data;
+}
+
+const modalTemplates = document.getElementById("modalTemplates");
+
+async function openTemplatesModal() {
+  if (!state.isAdmin) return;
+  const allTemplates = await fetchTemplates();
+  renderTemplateCategories(allTemplates);
+  
+  const firstCat = Object.keys(allTemplates)[0];
+  if (firstCat) selectCategory(firstCat);
+  
+  modalTemplates.classList.remove('hidden');
+}
+
+function closeModal(modal) {
+  modal.classList.add('hidden');
+}
+
+function renderTemplateCategories(allTemplates) {
+  const container = document.getElementById("templateCategories");
+  container.innerHTML = "";
+  
+  const icons = {
+    "quebra-gelo": "🧊",
+    "dinamica-tradicional": "📋",
+    "dinamica-avancada": "⚡",
+    "acao-e-followup": "🚀"
+  };
+
+  Object.keys(allTemplates).forEach(cat => {
+    const div = document.createElement("div");
+    div.className = "category-item";
+    div.innerHTML = `<span class="category-icon">${icons[cat] || '📁'}</span> ${cat}`;
+    div.onclick = () => selectCategory(cat);
+    container.appendChild(div);
+  });
+}
+
+function selectCategory(cat) {
+  document.querySelectorAll(".category-item").forEach(el => {
+    el.classList.toggle("active", el.textContent.includes(cat));
+  });
+  
+  const models = state.templates[cat];
+  const container = document.getElementById("templatesListItems");
+  container.innerHTML = models.map(m => `
+    <div class="model-item" data-id="${m.id}">${m.name}</div>
+  `).join("");
+
+  container.querySelectorAll(".model-item").forEach(el => {
+    el.onclick = () => selectModel(models.find(m => m.id === el.dataset.id));
+  });
+
+  if (models.length > 0) selectModel(models[0]);
+}
+
+function selectModel(model) {
+  state.selectedModel = model;
+  document.querySelectorAll(".model-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.id === model.id);
+  });
+
+  document.getElementById("templatePreviewTitleOverlay").textContent = model.name;
+  document.getElementById("templatePreviewDesc").textContent = model.description;
+  
+  const imgMap = {
+    "quebra-gelo": "cat_quebra_gelo.png",
+    "dinamica-tradicional": "https://images.unsplash.com/photo-1522071823991-b99c123ad90c?w=800&q=80",
+    "dinamica-avancada": "https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&q=80",
+    "acao-e-followup": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&q=80"
+  };
+  document.getElementById("templatePreviewImage").src = imgMap[model.category] || "placeholder-retro.png";
+
+  const colContainer = document.getElementById("templatePreviewColumns");
+  colContainer.innerHTML = (model.columns || []).map(c => `
+    <li class="column-tag">${c}</li>
+  `).join("");
+
+  const tip = document.getElementById("templatePreviewTip");
+  tip.textContent = `Indicado para: ${model.category}. Tempo sugerido: 30-45 min.`;
+}
+
+async function applyTemplateToBoard() {
+  if (!state.selectedModel) return;
+  if (!confirm("Isso mudará as colunas do quadro. Os cartões atuais serão movidos para a primeira coluna. Deseja continuar?")) return;
+
+  const model = state.selectedModel;
+  const newColumns = model.columns.map(name => ({ id: createId(), name }));
+  
+  // Move existing cards to the first new column
+  const firstColId = newColumns[0].id;
+  state.room.cards.forEach(card => {
+    card.columnId = firstColId;
+  });
+
+  state.room.columns = newColumns;
+  
+  createBoard();
+  renderCards();
+  await saveBoardToRetro();
+  
+  closeModal(modalTemplates);
 }

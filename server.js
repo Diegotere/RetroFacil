@@ -1,5 +1,6 @@
 import express from "express";
 import path from "node:path";
+import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { open } from "sqlite";
 import sqlite3 from "sqlite3";
@@ -794,6 +795,63 @@ app.put("/api/admin/users/:userId/password", authenticateSuperAdmin, async (req,
   const hash = await bcrypt.hash(password, 10);
   await db.run("UPDATE users SET password_hash = ? WHERE id = ?", hash, req.params.userId);
   res.status(204).end();
+});
+
+app.get("/api/templates", async (req, res) => {
+  try {
+    const filePath = "/Users/diegorezendedepaula/Downloads/retrospectivas-ageis.md";
+    const content = await fs.readFile(filePath, "utf-8");
+    
+    const sections = content.split(/---\s*/);
+    const categories = [];
+    let currentCategory = null;
+
+    for (const section of sections) {
+      const trimmed = section.trim();
+      if (!trimmed) continue;
+
+      // Match category header
+      const catMatch = trimmed.match(/^## tipo:\s*(.+)$/m);
+      if (catMatch) {
+        currentCategory = catMatch[1].trim();
+        continue;
+      }
+
+      // Match model header
+      const modelMatch = trimmed.match(/^###\s*(.+)$/m);
+      if (modelMatch && currentCategory) {
+        const name = modelMatch[1].trim();
+        const model = { name, category: currentCategory };
+        
+        // Extract fields
+        const idMatch = trimmed.match(/^- \*\*id:\*\* `(.+?)`/m);
+        const descMatch = trimmed.match(/^- \*\*descricao:\*\* (.+)$/m);
+        const colMatch = trimmed.match(/^- \*\*(?:colunas|elementos|dimensoes):\*\* `\[(.+?)\]`/m);
+        
+        if (idMatch) model.id = idMatch[1];
+        if (descMatch) model.description = descMatch[1].trim();
+        if (colMatch) {
+          model.columns = colMatch[1].split(",").map(c => c.replace(/"/g, '').trim());
+        } else {
+          model.columns = []; // Default for icebreakers etc
+        }
+
+        categories.push(model);
+      }
+    }
+
+    // Group by category
+    const grouped = categories.reduce((acc, model) => {
+      if (!acc[model.category]) acc[model.category] = [];
+      acc[model.category].push(model);
+      return acc;
+    }, {});
+
+    res.json(grouped);
+  } catch (error) {
+    console.error("Erro ao ler templates:", error);
+    res.status(500).json({ error: "Erro ao carregar modelos de retrospectiva" });
+  }
 });
 
 // Deleta um usuário e tudo o que ele criou

@@ -85,6 +85,7 @@
             </div>
 
             <button class="ghost small admin-only" id="btnEditBoard" title="Editar Quadro"><i data-lucide="edit-3"></i></button>
+            <button class="ghost small admin-only" id="btnOpenTemplates" title="Modelos de Retro"><i data-lucide="layout"></i></button>
             <button class="ghost" id="btnExport">Exportar</button>
             <button class="primary" id="btnEndSession">Encerrar Sessão</button>
           </div>
@@ -133,7 +134,68 @@
       </div>
     </template>
 
+    <!-- Template Selection Modal -->
+    <div id="modalTemplates" class="modal hidden">
+      <div class="modal-content templates-modal">
+        <div class="templates-header">
+          <div class="header-main">
+            <h2>Modelos de Retrospectiva</h2>
+            <p class="text-muted">Escolha um modelo para aplicar ao seu quadro</p>
+          </div>
+          <button class="ghost small close-modal-btn" id="btnCloseTemplates">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+
+        <div class="templates-body">
+          <aside class="templates-sidebar">
+            <h3>CATEGORIA</h3>
+            <div id="templateCategories" class="category-list">
+              <!-- Categories injected here -->
+            </div>
+          </aside>
+
+          <main class="templates-list-container">
+            <h3>MODELOS</h3>
+            <div id="templatesListItems" class="model-list">
+              <!-- Models injected here -->
+            </div>
+          </main>
+
+          <section class="template-preview-panel">
+            <div id="templatePreviewContent" class="preview-content">
+              <div class="preview-image-placeholder">
+                <img src="placeholder-retro.png" alt="Preview" id="templatePreviewImage" />
+                <div class="image-overlay" id="templatePreviewTitleOverlay">Começar-Parar-Continuar</div>
+              </div>
+              
+              <div class="preview-details">
+                <ul id="templatePreviewColumns" class="preview-columns-tags">
+                  <!-- Column tags -->
+                </ul>
+                <p id="templatePreviewDesc" class="preview-description">
+                  Selecione um modelo para ver os detalhes aqui.
+                </p>
+              </div>
+
+              <div class="preview-tip">
+                <i data-lucide="info"></i>
+                <p id="templatePreviewTip">Dica: Use este modelo para times que buscam ações rápidas.</p>
+              </div>
+            </div>
+
+            <div class="preview-actions">
+              <button class="ghost" id="btnModifyTemplate">Modificar Modelo</button>
+              <button class="primary" id="btnConfirmTemplate">Aplicar ao Quadro</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <script src="theme.js"></script>
     <script src="retro.js"></script>
     <script>
