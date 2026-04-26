@@ -26,7 +26,8 @@ let state = {
   timerSeconds: 600,
   timerInterval: null,
   ws: null,
-  participants: []
+  participants: [],
+  isEditingBoard: false
 };
 
 const columnColors = {
@@ -95,12 +96,38 @@ function applyRoleVisibility() {
 function createBoard() {
   const container = document.getElementById("columnsContainer");
   container.innerHTML = "";
-  const columns = state.room.columns || defaultColumns;
+  const columns = (state.room.columns && state.room.columns.length > 0) ? state.room.columns : defaultColumns;
 
   columns.forEach((columnData, index) => {
     const template = document.getElementById("columnTemplate");
     const column = template.content.firstElementChild.cloneNode(true);
     column.dataset.columnId = columnData.id;
+    column.dataset.index = index;
+
+    if (state.isEditingBoard && state.isAdmin) {
+      column.classList.add("editing");
+      column.setAttribute("draggable", "true");
+      
+      const btnDelete = column.querySelector(".btn-delete-column");
+      btnDelete.classList.remove("hidden");
+      btnDelete.addEventListener("click", () => deleteColumn(columnData.id));
+
+      const titleEl = column.querySelector(".column-title");
+      titleEl.contentEditable = "true";
+      titleEl.addEventListener("blur", () => updateColumnTitle(columnData.id, titleEl.textContent));
+      titleEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          titleEl.blur();
+        }
+      });
+
+      // Drag and Drop events
+      column.addEventListener("dragstart", handleDragStart);
+      column.addEventListener("dragover", handleDragOver);
+      column.addEventListener("drop", handleDrop);
+      column.addEventListener("dragend", handleDragEnd);
+    }
 
     const titleEl = column.querySelector(".column-title");
     titleEl.textContent = columnData.name;
@@ -113,6 +140,14 @@ function createBoard() {
 
     container.appendChild(column);
   });
+
+  if (state.isEditingBoard && state.isAdmin) {
+    const addPlaceholder = document.createElement("button");
+    addPlaceholder.className = "new-column-placeholder";
+    addPlaceholder.innerHTML = `<i data-lucide="plus-circle"></i> <span>Adicionar Coluna</span>`;
+    addPlaceholder.addEventListener("click", addNewColumn);
+    container.appendChild(addPlaceholder);
+  }
 
   if (window.lucide) lucide.createIcons();
 }
@@ -342,23 +377,27 @@ function setupHeaderAndShare() {
   if (shareUrlInput) shareUrlInput.value = window.location.href;
 }
 
-function updatePhase(newPhase) {
+async function updatePhase(newPhase) {
   state.phase = newPhase;
   document.querySelectorAll('.phase-item').forEach(el => {
     el.classList.toggle('active', el.dataset.phase === newPhase);
   });
 
   if (state.isAdmin) {
-    api(`/retros/${state.room.id}/phase`, {
-      method: "PUT",
-      body: JSON.stringify({ phase: newPhase })
-    });
-  }
+    try {
+      await api(`/retros/${state.room.id}/phase`, {
+        method: "PUT",
+        body: JSON.stringify({ phase: newPhase })
+      });
 
-  // Auto-reveal cards if moving to Discussion
-  if (newPhase === 'discussion' && state.isAdmin) {
-    state.room.cards.forEach(c => c.hidden = false);
-    saveBoardToRetro();
+      // Auto-reveal cards if moving to Discussion
+      if (newPhase === 'discussion') {
+        state.room.cards.forEach(c => c.hidden = false);
+        await saveBoardToRetro();
+      }
+    } catch (e) {
+      alert("Erro ao sincronizar fase: " + e.message);
+    }
   }
 
   renderCards();
@@ -473,11 +512,23 @@ function exportToCSV() {
 
 function setupEvents() {
   document.querySelectorAll('.phase-item').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       if (!state.isAdmin) return;
-      updatePhase(btn.dataset.phase);
+      await updatePhase(btn.dataset.phase);
     });
   });
+
+  const btnEdit = document.getElementById("btnEditBoard");
+  if (btnEdit) {
+    btnEdit.addEventListener("click", () => {
+      if (!state.isAdmin) return;
+      state.isEditingBoard = !state.isEditingBoard;
+      btnEdit.classList.toggle("primary", state.isEditingBoard);
+      btnEdit.classList.toggle("ghost", !state.isEditingBoard);
+      createBoard();
+      renderCards();
+    });
+  }
 
   document.getElementById("btnExport").addEventListener("click", exportToCSV);
   document.getElementById("btnEndSession").addEventListener("click", () => {
@@ -619,4 +670,87 @@ function renderParticipants() {
     more.textContent = `+${state.participants.length - 3}`;
     stack.appendChild(more);
   }
+}
+
+// === Edição do Quadro ===
+
+function addNewColumn() {
+  const name = prompt("Nome da nova coluna:");
+  if (!name) return;
+  
+  const newCol = { id: createId(), name };
+  state.room.columns.push(newCol);
+  createBoard();
+  renderCards();
+  saveBoardToRetro();
+}
+
+function deleteColumn(columnId) {
+  if (state.room.columns.length <= 1) {
+    alert("O quadro deve ter pelo menos uma coluna.");
+    return;
+  }
+  
+  if (!confirm("Tem certeza que deseja excluir esta coluna? Os cartões nela serão movidos para a primeira coluna.")) {
+    return;
+  }
+
+  const colIndex = state.room.columns.findIndex(c => c.id === columnId);
+  const firstColId = state.room.columns[colIndex === 0 ? 1 : 0].id;
+
+  // Move cards
+  state.room.cards.forEach(card => {
+    if (card.columnId === columnId) {
+      card.columnId = firstColId;
+    }
+  });
+
+  state.room.columns.splice(colIndex, 1);
+  createBoard();
+  renderCards();
+  saveBoardToRetro();
+}
+
+function updateColumnTitle(columnId, newName) {
+  const col = state.room.columns.find(c => c.id === columnId);
+  if (col && col.name !== newName) {
+    col.name = newName;
+    saveBoardToRetro();
+  }
+}
+
+// Drag and Drop Logic
+let dragSourceIndex = null;
+
+function handleDragStart(e) {
+  dragSourceIndex = this.dataset.index;
+  this.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", dragSourceIndex);
+}
+
+function handleDragOver(e) {
+  if (e.preventDefault) e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  return false;
+}
+
+function handleDrop(e) {
+  if (e.stopPropagation) e.stopPropagation();
+  const targetIndex = this.dataset.index;
+  
+  if (dragSourceIndex !== targetIndex) {
+    const cols = state.room.columns;
+    const [movedCol] = cols.splice(dragSourceIndex, 1);
+    cols.splice(targetIndex, 0, movedCol);
+    
+    createBoard();
+    renderCards();
+    saveBoardToRetro();
+  }
+  return false;
+}
+
+function handleDragEnd() {
+  this.classList.remove("dragging");
 }

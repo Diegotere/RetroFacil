@@ -84,7 +84,7 @@
               </div>
             </div>
 
-            <button class="ghost small" id="btnInfo"><i data-lucide="info"></i></button>
+            <button class="ghost small admin-only" id="btnEditBoard" title="Editar Quadro"><i data-lucide="edit-3"></i></button>
             <button class="ghost" id="btnExport">Exportar</button>
             <button class="primary" id="btnEndSession">Encerrar Sessão</button>
           </div>
@@ -101,9 +101,12 @@
       <section class="retro-column">
         <header class="column-header">
           <div class="status-dot"></div>
-          <h2 class="column-title">Nome da Coluna</h2>
+          <h2 class="column-title" contenteditable="false">Nome da Coluna</h2>
           <span class="count">0</span>
-          <button class="ghost small btn-add-card-header"><i data-lucide="plus"></i></button>
+          <div class="column-header-actions">
+            <button class="ghost small btn-add-card-header" title="Adicionar Cartão"><i data-lucide="plus"></i></button>
+            <button class="ghost small btn-delete-column admin-only hidden" title="Excluir Coluna"><i data-lucide="trash-2"></i></button>
+          </div>
         </header>
         
         <button class="add-card-btn">

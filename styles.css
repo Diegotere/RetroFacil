@@ -421,6 +421,55 @@ select {
   font-weight: 700;
 }
 
+/* Edit Mode Styles */
+.retro-column.editing {
+  border: 2px dashed var(--primary);
+  cursor: grab;
+}
+
+.retro-column.editing:active {
+  cursor: grabbing;
+}
+
+.retro-column.editing .column-title {
+  background: var(--primary-light);
+  border-radius: 4px;
+  padding: 0 4px;
+  cursor: text;
+}
+
+.new-column-placeholder {
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.2s;
+  gap: 0.5rem;
+  background: transparent;
+  width: 100%;
+}
+
+.new-column-placeholder:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.column-header-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.dragging {
+  opacity: 0.5;
+}
+
 /* Responsividade - Mobile First */
 @media (max-width: 768px) {
   .workspace {

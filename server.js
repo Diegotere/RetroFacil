@@ -10,7 +10,21 @@ import { OAuth2Client } from "google-auth-library";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const JWT_SECRET = process.env.JWT_SECRET || "retrofacil_secret_key_123";
+const JWT_SECRET = process.env.JWT_SECRET || "retrofacil-secret-key-123";
+
+// Mutex para evitar colisões de transações no SQLite
+let dbLock = Promise.resolve();
+async function withDbLock(fn) {
+  const currentLock = dbLock;
+  let release;
+  dbLock = new Promise(resolve => release = resolve);
+  await currentLock;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
 
 // ATENÇÃO: Substitua pelo seu Client ID real
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "737345557047-cd71egdu71tpd8sa66rtb09jj71d51lp.apps.googleusercontent.com";
@@ -226,6 +240,13 @@ try {
   await db.exec("ALTER TABLE users ADD COLUMN reset_expires TEXT;");
 } catch (e) {
   // Ignora se as colunas já existirem
+}
+
+// Tenta adicionar a coluna hidden na tabela cards se não existir
+try {
+  await db.exec("ALTER TABLE cards ADD COLUMN hidden INTEGER DEFAULT 0;");
+} catch (e) {
+  // Ignora se a coluna já existir
 }
 
 const defaultColumns = [
@@ -476,17 +497,24 @@ app.post("/api/retros", authenticateToken, async (req, res) => {
 });
 
 app.put("/api/retros/:retroId/phase", authenticateToken, async (req, res) => {
-  const { phase } = req.body || {};
-  if (!phase) return res.status(400).json({ error: "Fase inválida" });
+  await withDbLock(async () => {
+    try {
+      const { phase } = req.body || {};
+      if (!phase) return res.status(400).json({ error: "Fase inválida" });
 
-  await db.run("UPDATE retros SET phase = ?, updated_at = ? WHERE id = ?", phase, new Date().toISOString(), req.params.retroId);
-  
-  broadcastToRetro(req.params.retroId, {
-    type: 'phase_updated',
-    payload: { phase }
+      await db.run("UPDATE retros SET phase = ?, updated_at = ? WHERE id = ?", phase, new Date().toISOString(), req.params.retroId);
+      
+      broadcastToRetro(req.params.retroId, {
+        type: 'phase_updated',
+        payload: { phase }
+      });
+
+      res.status(204).end();
+    } catch (error) {
+      console.error("Erro ao atualizar fase:", error);
+      res.status(500).json({ error: "Erro interno ao atualizar fase" });
+    }
   });
-
-  res.status(204).end();
 });
 
 app.put("/api/retros/:retroId/timer", authenticateToken, async (req, res) => {
@@ -533,8 +561,14 @@ app.get("/api/retros/:retroId", async (req, res) => {
 
   if (!retro) return res.status(404).json({ error: "Retro não encontrada" });
 
-  const columns = await db.all("SELECT id, name, position FROM retro_columns WHERE retro_id = ? ORDER BY position ASC", retro.id);
-  const cards = await db.all("SELECT id, text, votes, column_id AS columnId, position, user_id AS userId FROM cards WHERE retro_id = ? ORDER BY position ASC", retro.id);
+  let columns = await db.all("SELECT id, name, position FROM retro_columns WHERE retro_id = ? ORDER BY position ASC", retro.id);
+  
+  // Recuperação: se o quadro estiver sem colunas (devido a erro anterior), usa as padrões
+  if (!columns || columns.length === 0) {
+    columns = defaultColumns.map((c, i) => ({ id: c.id, name: c.name, position: i }));
+  }
+
+  const cards = await db.all("SELECT id, text, votes, column_id AS columnId, position, user_id AS userId, hidden FROM cards WHERE retro_id = ? ORDER BY position ASC", retro.id);
 
   res.json({
     id: retro.id,
@@ -568,94 +602,115 @@ app.put("/api/retros/:retroId", optionalAuth, async (req, res) => {
   const retroId = req.params.retroId;
   const { columns = [], cards = [] } = req.body || {};
 
-  const retro = await db.get("SELECT id, creator_session_id FROM retros WHERE id = ?", retroId);
-  if (!retro) return res.status(404).json({ error: "Retro não encontrada" });
-
-  const currentUserId = req.user ? req.user.id : null;
-  const isOwner = currentUserId && retro.creator_session_id === currentUserId;
-
-  // Apenas o criador (admin) pode mudar colunas
-  if (isOwner) {
-    await db.run("DELETE FROM retro_columns WHERE retro_id = ?", retroId);
-    for (const [index, column] of columns.entries()) {
-      await db.run("INSERT INTO retro_columns (id, retro_id, name, position) VALUES (?, ?, ?, ?)", column.id, retroId, column.name, index);
-    }
-  }
-
-  // Pega os cartões antigos para preservar os que não são do usuário atual
-  const oldCards = await db.all("SELECT * FROM cards WHERE retro_id = ?", retroId);
-
-  await db.run("DELETE FROM cards WHERE retro_id = ?", retroId);
-
-  const cardsToSave = [];
-
-  // Preserva cartões de outros usuários (não pode deletar o cartão de outro se não for owner)
-  oldCards.forEach(oldCard => {
-    if (oldCard.user_id !== currentUserId && !isOwner) {
-      const payloadCard = cards.find(c => c.id === oldCard.id);
-      if (payloadCard) {
-        cardsToSave.push({ ...oldCard, column_id: payloadCard.columnId, position: cards.indexOf(payloadCard), votes: payloadCard.votes });
-      } else {
-        cardsToSave.push(oldCard);
+  await withDbLock(async () => {
+    try {
+      await db.run("BEGIN TRANSACTION;");
+      
+      const retro = await db.get("SELECT id, creator_session_id FROM retros WHERE id = ?", retroId);
+      if (!retro) {
+        await db.run("ROLLBACK;");
+        return res.status(404).json({ error: "Retro não encontrada" });
       }
-    }
-  });
 
-  // Adiciona/Atualiza os cartões do próprio usuário (ou anônimos, ou todos se for owner)
-  cards.forEach((card, index) => {
-    const old = oldCards.find(c => c.id === card.id);
-    // Permite se: novo cartão, ou é o dono do cartão, ou é admin, ou cartão anônimo (null)
-    const cardOwner = old ? old.user_id : null;
-    const canSave = !old || isOwner || cardOwner === currentUserId || cardOwner === null;
-    if (canSave) {
-      cardsToSave.push({
-        id: card.id,
-        retro_id: retroId,
-        column_id: card.columnId,
-        text: card.text,
-        votes: Number(card.votes || 0),
-        position: index,
-        user_id: old ? old.user_id : currentUserId
+      const currentUserId = req.user ? req.user.id : null;
+      const isOwner = currentUserId && retro.creator_session_id === currentUserId;
+
+      // Apenas o criador (admin) pode mudar colunas
+      if (isOwner) {
+        await db.run("DELETE FROM retro_columns WHERE retro_id = ?", retroId);
+        for (const [index, column] of columns.entries()) {
+          await db.run("INSERT INTO retro_columns (id, retro_id, name, position) VALUES (?, ?, ?, ?)", column.id, retroId, column.name, index);
+        }
+      }
+
+      // Pega os cartões antigos para preservar os que não são do usuário atual
+      const oldCards = await db.all("SELECT * FROM cards WHERE retro_id = ?", retroId);
+
+      await db.run("DELETE FROM cards WHERE retro_id = ?", retroId);
+
+      const cardsToSave = [];
+
+      // Preserva cartões de outros usuários
+      oldCards.forEach(oldCard => {
+        if (oldCard.user_id !== currentUserId && !isOwner) {
+          const payloadCard = cards.find(c => c.id === oldCard.id);
+          if (payloadCard) {
+            cardsToSave.push({ 
+              ...oldCard, 
+              column_id: payloadCard.columnId, 
+              position: cards.indexOf(payloadCard), 
+              votes: payloadCard.votes,
+              hidden: payloadCard.hidden ? 1 : 0
+            });
+          } else {
+            cardsToSave.push(oldCard);
+          }
+        }
       });
+
+      // Adiciona/Atualiza os cartões do próprio usuário (ou todos se for owner)
+      cards.forEach((card, index) => {
+        const old = oldCards.find(c => c.id === card.id);
+        const cardOwner = old ? old.user_id : null;
+        const canSave = !old || isOwner || cardOwner === currentUserId || cardOwner === null;
+        if (canSave) {
+          cardsToSave.push({
+            id: card.id,
+            retro_id: retroId,
+            column_id: card.columnId,
+            text: card.text,
+            votes: Number(card.votes || 0),
+            position: index,
+            user_id: old ? old.user_id : currentUserId,
+            hidden: card.hidden ? 1 : 0
+          });
+        }
+      });
+
+      const uniqueCardsToSave = [...new Map(cardsToSave.map(item => [item.id, item])).values()];
+
+      for (const card of uniqueCardsToSave) {
+        await db.run(
+          "INSERT INTO cards (id, retro_id, column_id, text, votes, position, user_id, hidden) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          card.id, retroId, card.column_id, card.text, card.votes, card.position, card.user_id, card.hidden
+        );
+      }
+
+      await db.run("UPDATE retros SET updated_at = ? WHERE id = ?", new Date().toISOString(), retroId);
+      
+      await db.run("COMMIT;");
+
+      // Broadcast update
+      const updatedRetro = await db.get(
+        `SELECT r.id, r.title, r.creator_session_id AS creatorSessionId, r.created_at AS date, r.updated_at AS updatedAt, t.id AS teamId, t.name AS teamName
+         FROM retros r JOIN teams t ON t.id = r.team_id WHERE r.id = ?`, retroId
+      );
+      if (updatedRetro) {
+        const updatedColumns = await db.all("SELECT id, name, position FROM retro_columns WHERE retro_id = ? ORDER BY position ASC", retroId);
+        const updatedCards = await db.all("SELECT id, text, votes, column_id AS columnId, position, user_id AS userId, hidden FROM cards WHERE retro_id = ? ORDER BY position ASC", retroId);
+        
+        broadcastToRetro(retroId, {
+          type: 'retro_updated',
+          payload: {
+            id: updatedRetro.id,
+            title: updatedRetro.title,
+            creatorSessionId: updatedRetro.creatorSessionId,
+            date: updatedRetro.date,
+            updatedAt: updatedRetro.updatedAt,
+            team: { id: updatedRetro.teamId, name: updatedRetro.teamName },
+            columns: updatedColumns.map((c) => ({ id: c.id, name: c.name })),
+            cards: updatedCards.map(c => ({ ...c, hidden: !!c.hidden }))
+          }
+        });
+      }
+      
+      res.status(204).end();
+    } catch (error) {
+      await db.run("ROLLBACK;").catch(() => {});
+      console.error("Erro ao salvar quadro:", error);
+      res.status(500).json({ error: "Erro interno ao salvar quadro" });
     }
   });
-
-  const uniqueCardsToSave = [...new Map(cardsToSave.map(item => [item.id, item])).values()];
-
-  for (const card of uniqueCardsToSave) {
-    await db.run(
-      "INSERT INTO cards (id, retro_id, column_id, text, votes, position, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      card.id, retroId, card.column_id, card.text, card.votes, card.position, card.user_id
-    );
-  }
-
-   await db.run("UPDATE retros SET updated_at = ? WHERE id = ?", new Date().toISOString(), retroId);
-   
-    // Broadcast update to all clients viewing this retro
-    const updatedRetro = await db.get(
-      `SELECT r.id, r.title, r.creator_session_id AS creatorSessionId, r.created_at AS date, r.updated_at AS updatedAt, t.id AS teamId, t.name AS teamName
-       FROM retros r JOIN teams t ON t.id = r.team_id WHERE r.id = ?`, retroId
-    );
-   if (updatedRetro) {
-     const columns = await db.all("SELECT id, name, position FROM retro_columns WHERE retro_id = ? ORDER BY position ASC", retroId);
-     const cards = await db.all("SELECT id, text, votes, column_id AS columnId, position, user_id AS userId FROM cards WHERE retro_id = ? ORDER BY position ASC", retroId);
-     
-     broadcastToRetro(retroId, {
-       type: 'retro_updated',
-       payload: {
-         id: updatedRetro.id,
-         title: updatedRetro.title,
-         creatorSessionId: updatedRetro.creatorSessionId,
-         date: updatedRetro.date,
-         updatedAt: updatedRetro.updatedAt,
-         team: { id: updatedRetro.teamId, name: updatedRetro.teamName },
-         columns: columns.map((c) => ({ id: c.id, name: c.name })),
-         cards
-       }
-     });
-   }
-   
-   res.status(204).end();
 });
 
 app.get("/api/reports/:teamId", authenticateToken, async (req, res) => {
