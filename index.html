@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RetroFacil</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body>
     <div class="dashboard-layout">
@@ -14,12 +15,22 @@
           <img src="logo.png" alt="RetroFácil Logo" class="brand-logo" />
         </div>
         <nav class="sidebar-nav">
-          <button class="nav-item active" id="navDashboard">📊 Dashboard</button>
-          <button class="nav-item" id="navReports">📈 Relatórios</button>
+          <button class="nav-item active" id="navDashboard">
+            <i data-lucide="layout-dashboard"></i> Dashboard
+          </button>
+          <button class="nav-item" id="navReports">
+            <i data-lucide="bar-chart-3"></i> Relatórios
+          </button>
         </nav>
         <div class="sidebar-footer">
-          <button class="ghost small" id="themeToggle">🌙 Tema</button>
-          <button class="ghost danger small" id="logoutBtn">Sair</button>
+          <div class="theme-switch-wrapper">
+            <span class="theme-switch-label">Modo Escuro</span>
+            <label class="switch" for="themeToggle">
+              <input type="checkbox" id="themeToggle" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <button class="ghost danger small" id="logoutBtn" style="justify-content: center; width: 100%;">Sair</button>
         </div>
       </aside>
 
@@ -30,7 +41,9 @@
             <h1>Dashboard</h1>
             <p class="text-muted">Acompanhe e gerencie suas retrospectivas.</p>
           </div>
-          <button class="primary" id="btnNovaRetro">+ Nova Retrospectiva</button>
+          <button class="primary" id="btnNovaRetro" style="gap: 8px;">
+            <i data-lucide="plus" style="width: 18px; height: 18px;"></i> Nova Retrospectiva
+          </button>
         </header>
 
         <div class="dashboard-content">
@@ -40,7 +53,9 @@
               <label for="teamSelect">Selecione o Time:</label>
               <select id="teamSelect"></select>
             </div>
-            <button class="ghost small" id="btnManageTeams">⚙️ Gerenciar Times da Equipe</button>
+            <button class="ghost small" id="btnManageTeams" style="gap: 8px; border: none; font-weight: 500;">
+              <i data-lucide="settings" style="width: 16px; height: 16px;"></i> Gerenciar Times da Equipe
+            </button>
           </div>
 
           <!-- View: Dashboard (Retros) -->

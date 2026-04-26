@@ -319,7 +319,8 @@ function renderRetroList() {
         ${badgeHtml}
       </div>
       <div class="retro-card-body">
-        <span>📄 ${retro.cardCount || 0} cartões</span>
+        <i data-lucide="files" style="width: 14px; height: 14px;"></i>
+        <span>${retro.cardCount || 0} cartões</span>
       </div>
       <div class="retro-card-actions"></div>
     `;
@@ -335,7 +336,6 @@ function renderRetroList() {
     if (isOngoing) {
       const finishBtn = document.createElement("button");
       finishBtn.className = "ghost success";
-      finishBtn.style.color = "var(--success)";
       finishBtn.textContent = "Finalizar";
       finishBtn.onclick = () => updateRetroStatus(retro.id, 'completed');
       actionsDiv.appendChild(finishBtn);
@@ -355,6 +355,8 @@ function renderRetroList() {
 
     retroGrid.appendChild(card);
   });
+  
+  if (window.lucide) lucide.createIcons();
 }
 
 async function renderReports() {
@@ -457,3 +459,6 @@ function setupEvents() {
 
 setupEvents();
 refreshTeams();
+
+// Inicializa ícones se o Lucide estiver disponível
+if (window.lucide) lucide.createIcons();

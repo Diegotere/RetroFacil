@@ -385,31 +385,50 @@ function setupEvents() {
 function setupWebSocket() {
   // Connect to WebSocket server
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${protocol}//${window.location.host}?retro=${retroId}`);
+  const wsUrl = `${protocol}//${window.location.host}?retro=${retroId}`;
+  console.log('Connecting to WebSocket:', wsUrl);
+  
+  ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
     console.log('WebSocket connected for retro:', retroId);
+    // Send a ping to test the connection
+    ws.send(JSON.stringify({ type: 'ping' }));
   };
 
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data.type === 'board_update') {
-        // Update the board with the received data
-        room.columns = data.data.columns || room.columns;
-        room.cards = data.data.cards || room.cards;
-        
-        // Recreate the board and reload cards
-        createBoard();
-        loadRetroCards();
-      }
-    } catch (error) {
-      console.error('Error processing WebSocket message:', error);
-    }
-  };
+   ws.onmessage = (event) => {
+     console.log('WebSocket message received:', event.data);
+     try {
+       const data = JSON.parse(event.data);
+       if (data.type === 'retro_updated') {
+         console.log('Updating board with data from WebSocket');
+         // Update the board with the received data
+         room = {
+           ...room,
+           id: data.payload.id,
+           title: data.payload.title,
+           creatorSessionId: data.payload.creatorSessionId,
+           date: data.payload.date,
+           updatedAt: data.payload.updatedAt,
+           team: data.payload.team,
+           columns: data.payload.columns,
+           cards: data.payload.cards
+         };
+         
+         // Recreate the board and reload cards
+         createBoard();
+         loadRetroCards();
+         console.log('Board updated successfully');
+       } else if (data.type === 'pong') {
+         console.log('WebSocket ping/pong successful');
+       }
+     } catch (error) {
+       console.error('Error processing WebSocket message:', error);
+     }
+   };
 
-  ws.onclose = () => {
-    console.log('WebSocket disconnected for retro:', retroId);
+  ws.onclose = (event) => {
+    console.log('WebSocket disconnected for retro:', retroId, 'code:', event.code, 'reason:', event.reason);
     // Attempt to reconnect after a short delay
     setTimeout(setupWebSocket, 3000);
   };

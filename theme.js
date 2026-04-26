@@ -23,10 +23,18 @@ document.addEventListener("DOMContentLoaded", () => {
   function applyTheme(theme) {
     if (theme === "dark") {
       document.documentElement.classList.add("dark");
-      themeToggleBtn.textContent = "☀️ Modo Claro";
+      if (themeToggleBtn.type === "checkbox") {
+        themeToggleBtn.checked = true;
+      } else {
+        themeToggleBtn.textContent = "☀️ Modo Claro";
+      }
     } else {
       document.documentElement.classList.remove("dark");
-      themeToggleBtn.textContent = "🌙 Modo Escuro";
+      if (themeToggleBtn.type === "checkbox") {
+        themeToggleBtn.checked = false;
+      } else {
+        themeToggleBtn.textContent = "🌙 Modo Escuro";
+      }
     }
   }
 
@@ -38,9 +46,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Toggle do tema ao clicar
-  themeToggleBtn.addEventListener("click", () => {
-    const isDark = document.documentElement.classList.contains("dark");
-    const newTheme = isDark ? "light" : "dark";
+  themeToggleBtn.addEventListener("change", () => {
+    const isDark = themeToggleBtn.checked;
+    const newTheme = isDark ? "dark" : "light";
     localStorage.setItem("theme", newTheme);
     applyTheme(newTheme);
   });

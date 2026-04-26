@@ -489,8 +489,33 @@ app.put("/api/retros/:retroId", optionalAuth, async (req, res) => {
     );
   }
 
-  await db.run("UPDATE retros SET updated_at = ? WHERE id = ?", new Date().toISOString(), retroId);
-  res.status(204).end();
+   await db.run("UPDATE retros SET updated_at = ? WHERE id = ?", new Date().toISOString(), retroId);
+   
+    // Broadcast update to all clients viewing this retro
+    const updatedRetro = await db.get(
+      `SELECT r.id, r.title, r.creator_session_id AS creatorSessionId, r.created_at AS date, r.updated_at AS updatedAt, t.id AS teamId, t.name AS teamName
+       FROM retros r JOIN teams t ON t.id = r.team_id WHERE r.id = ?`, retroId
+    );
+   if (updatedRetro) {
+     const columns = await db.all("SELECT id, name, position FROM retro_columns WHERE retro_id = ? ORDER BY position ASC", retroId);
+     const cards = await db.all("SELECT id, text, votes, column_id AS columnId, position, user_id AS userId FROM cards WHERE retro_id = ? ORDER BY position ASC", retroId);
+     
+     broadcastToRetro(retroId, {
+       type: 'retro_updated',
+       payload: {
+         id: updatedRetro.id,
+         title: updatedRetro.title,
+         creatorSessionId: updatedRetro.creatorSessionId,
+         date: updatedRetro.date,
+         updatedAt: updatedRetro.updatedAt,
+         team: { id: updatedRetro.teamId, name: updatedRetro.teamName },
+         columns: columns.map((c) => ({ id: c.id, name: c.name })),
+         cards
+       }
+     });
+   }
+   
+   res.status(204).end();
 });
 
 app.get("/api/reports/:teamId", authenticateToken, async (req, res) => {
@@ -625,11 +650,14 @@ const retroConnections = new Map();
 function broadcastToRetro(retroId, data) {
   const connections = retroConnections.get(retroId);
   if (connections) {
+    console.log(`Broadcasting to ${connections.size} connections for retro ${retroId}`);
     connections.forEach((ws) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws.readyState === 1) { // WebSocket.OPEN = 1
         ws.send(JSON.stringify(data));
       }
     });
+  } else {
+    console.log(`No connections found for retro ${retroId}`);
   }
 }
 
