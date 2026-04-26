@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS teams (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  creator_id TEXT NOT NULL,
+  creator_id TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY(creator_id) REFERENCES users(id) ON DELETE CASCADE,
   UNIQUE(name, creator_id)
@@ -58,27 +58,30 @@ CREATE TABLE IF NOT EXISTS retros (
   updated_at TEXT NOT NULL,
   FOREIGN KEY(team_id) REFERENCES teams(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS retro_columns (
+  id TEXT PRIMARY KEY,
+  retro_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  FOREIGN KEY(retro_id) REFERENCES retros(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS cards (
+  id TEXT PRIMARY KEY,
+  retro_id TEXT NOT NULL,
+  column_id TEXT NOT NULL,
+  text TEXT,
+  votes INTEGER DEFAULT 0,
+  position INTEGER NOT NULL,
+  user_id TEXT,
+  FOREIGN KEY(retro_id) REFERENCES retros(id) ON DELETE CASCADE,
+  FOREIGN KEY(column_id) REFERENCES retro_columns(id) ON DELETE CASCADE
+);
 `);
 
 // Fix teams table schema if needed (update to proper unique constraint)
 try {
   // Check current table schema
-  const tableInfo = await db.all(`PRAGMA table_info(teams)`);
   const indexInfo = await db.all(`PRAGMA index_list(teams)`);
-  
-  // Check if we have the old UNIQUE constraint on name only
-  const hasOldUniqueName = indexInfo.some(idx => 
-    idx.origin === 'u' &&  // 'u' means unique index
-    idx.name === 'sqlite_autoindex_teams_2' &&  // This is the auto-generated index on name
-    true
-  );
-  
-  // Check if we have the correct composite unique constraint
-  const hasCorrectUnique = indexInfo.some(idx => 
-    idx.origin === 'u' &&  // 'u' means unique index
-    idx.name === 'sqlite_autoindex_teams_2' && 
-    false // We'll check the columns individually below
-  );
   
   // Actually check the columns in the index
   let hasNameOnlyIndex = false;
@@ -104,68 +107,76 @@ try {
   if (hasNameOnlyIndex && !hasCompositeIndex) {
     console.log("[Migrating] Updating teams table to have composite unique constraint (name, creator_id)");
     
-    // Create new table with correct schema
-    await db.exec(`
-      CREATE TABLE teams_new (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        creator_id TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(creator_id) REFERENCES users(id) ON DELETE CASCADE,
-        UNIQUE(name, creator_id)
-      );
-    `);
-    
-    // Copy data from old table to new table
-    // We need to handle potential duplicates - keep the first occurrence
-    await db.exec(`
-      INSERT INTO teams_new (id, name, creator_id, created_at)
-      SELECT id, name, creator_id, created_at
-      FROM teams
-      GROUP BY name, creator_id
-      HAVING COUNT(*) = 1
-      OR id = MIN(id); -- Keep the first ID if there are duplicates
-    `);
-    
-    // Drop old table and rename new table
-    await db.exec(`
-      DROP TABLE teams;
-      ALTER TABLE teams_new RENAME TO teams;
-    `);
-    
-    console.log("[Migration] Successfully updated teams table schema");
+    await db.exec("BEGIN TRANSACTION;");
+    try {
+      // Ensure clean state
+      await db.exec("DROP TABLE IF EXISTS teams_new;");
+      
+      // Create new table with correct schema
+      await db.exec(`
+        CREATE TABLE teams_new (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          creator_id TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY(creator_id) REFERENCES users(id) ON DELETE CASCADE,
+          UNIQUE(name, creator_id)
+        );
+      `);
+      
+      // Copy data from old table to new table
+      await db.exec(`
+        INSERT INTO teams_new (id, name, creator_id, created_at)
+        SELECT id, name, creator_id, created_at
+        FROM teams
+        GROUP BY name, creator_id
+        HAVING COUNT(*) = 1
+        OR id = MIN(id);
+      `);
+      
+      // Drop old table and rename new table
+      await db.exec("DROP TABLE teams;");
+      await db.exec("ALTER TABLE teams_new RENAME TO teams;");
+      
+      await db.exec("COMMIT;");
+      console.log("[Migration] Successfully updated teams table schema");
+    } catch (e) {
+      await db.exec("ROLLBACK;");
+      throw e;
+    }
   } else if (!hasNameOnlyIndex && !hasCompositeIndex) {
     console.log("[Migration] No unique constraints found, adding UNIQUE(name, creator_id)");
-    // Add the unique constraint
-    await db.exec(`
-      CREATE TABLE teams_new (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        creator_id TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(creator_id) REFERENCES users(id) ON DELETE CASCADE,
-        UNIQUE(name, creator_id)
-      );
-    `);
     
-    // Copy data
-    await db.exec(`
-      INSERT INTO teams_new SELECT * FROM teams;
-    `);
-    
-    // Replace table
-    await db.exec(`
-      DROP TABLE teams;
-      ALTER TABLE teams_new RENAME TO teams;
-    `);
-    
-    console.log("[Migration] Added unique constraint to teams table");
+    await db.exec("BEGIN TRANSACTION;");
+    try {
+      await db.exec("DROP TABLE IF EXISTS teams_new;");
+      
+      await db.exec(`
+        CREATE TABLE teams_new (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          creator_id TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY(creator_id) REFERENCES users(id) ON DELETE CASCADE,
+          UNIQUE(name, creator_id)
+        );
+      `);
+      
+      await db.exec("INSERT INTO teams_new SELECT * FROM teams;");
+      await db.exec("DROP TABLE teams;");
+      await db.exec("ALTER TABLE teams_new RENAME TO teams;");
+      
+      await db.exec("COMMIT;");
+      console.log("[Migration] Added unique constraint to teams table");
+    } catch (e) {
+      await db.exec("ROLLBACK;");
+      throw e;
+    }
   } else {
     console.log("[Migration] Teams table schema is already correct");
   }
 } catch (migrationError) {
   console.error("[Migration] Error fixing teams table schema:", migrationError);
-  // Continue anyway - the table might be fine as is
 }
 
 // Tenta adicionar a coluna user_id se ela ainda não existir na tabela antiga
@@ -441,10 +452,10 @@ app.delete("/api/teams/:teamId", authenticateToken, async (req, res) => {
 });
 
 app.post("/api/retros", authenticateToken, async (req, res) => {
-  const { teamId, title, columns } = req.body || {};
+  const { id: providedId, teamId, title, columns } = req.body || {};
   if (!teamId || !title) return res.status(400).json({ error: "Dados inválidos" });
 
-  const id = createId();
+  const id = providedId || createId();
   const now = new Date().toISOString();
   await db.run(
     "INSERT INTO retros (id, team_id, title, status, creator_session_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",

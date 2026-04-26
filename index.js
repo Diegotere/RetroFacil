@@ -35,9 +35,10 @@ const teamNameInput = document.getElementById("teamName");
 const state = {
   teams: [],
   currentTeamId: null,
-  activeTab: 'ongoing', // 'ongoing' | 'completed'
+    activeTab: 'ongoing', // 'ongoing' | 'completed'
   wizard: {
     currentStep: 1,
+    retroId: null, // ID pré-gerado para o link de convite
     selectedTemplate: 'glad_sad_mad',
     columns: [
       { id: 'glad', name: '😀 Contente' },
@@ -288,6 +289,7 @@ async function createRetroAndOpen() {
     const created = await api("/retros", {
       method: "POST",
       body: JSON.stringify({ 
+        id: state.wizard.retroId,
         teamId, 
         title, 
         columns: state.wizard.columns.map(c => ({ name: c.name })),
@@ -328,7 +330,7 @@ function updateWizardStep(step) {
     
     // Set invite link
     const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
-    document.getElementById("retroLinkDisplay").value = `${baseUrl}retro.html?retro=TEMP_ID`;
+    document.getElementById("retroLinkDisplay").value = `${baseUrl}retro.html?retro=${encodeURIComponent(state.wizard.retroId)}`;
   } else {
     nextBtn.classList.remove('hidden');
     finishBtn.classList.add('hidden');
@@ -390,6 +392,7 @@ function renderPreview() {
 
 function initWizard() {
   updateWizardStep(1);
+  state.wizard.retroId = createId(); // Gera um ID único para esta retrospectiva antes mesmo de criar
   
   // Fill teams in wizard
   const wizardTeamSelect = document.getElementById("wizardTeamSelect");

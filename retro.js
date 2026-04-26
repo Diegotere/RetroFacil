@@ -148,7 +148,8 @@ function renderCards() {
     
     col.querySelector(".count").textContent = colCards.length;
 
-    if (colCards.length === 0 && (columnData.name.toLowerCase().includes('ação') || columnData.name.toLowerCase().includes('action'))) {
+    const columnData = state.room.columns.find(c => c.id === colId);
+    if (colCards.length === 0 && columnData && (columnData.name.toLowerCase().includes('ação') || columnData.name.toLowerCase().includes('action'))) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
       empty.innerHTML = `
