@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS retros (
   team_id TEXT NOT NULL,
   title TEXT NOT NULL,
   status TEXT DEFAULT 'ongoing',
-  phase TEXT DEFAULT 'brainstorming',
+  phase TEXT DEFAULT 'discussion',
   timer_seconds INTEGER DEFAULT 600,
   creator_session_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
@@ -480,8 +480,8 @@ app.post("/api/retros", authenticateToken, async (req, res) => {
   const id = providedId || createId();
   const now = new Date().toISOString();
   await db.run(
-    "INSERT INTO retros (id, team_id, title, status, creator_session_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    id, teamId, title, 'ongoing', req.user.id, now, now
+    "INSERT INTO retros (id, team_id, title, status, phase, creator_session_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    id, teamId, title, 'ongoing', 'discussion', req.user.id, now, now
   );
 
   const columnsToCreate = columns && columns.length > 0 ? columns : defaultColumns;

@@ -22,7 +22,7 @@ let state = {
   room: null,
   isAdmin: false,
   votingMode: false,
-  phase: 'brainstorming',
+  phase: 'discussion',
   timerSeconds: 600,
   timerInterval: null,
   ws: null,
@@ -165,7 +165,7 @@ function promptAddCard(columnId) {
     votes: 0,
     columnId: columnId,
     userId,
-    hidden: state.phase === 'brainstorming'
+    hidden: false
   };
 
   if (!state.room.cards) state.room.cards = [];
@@ -215,7 +215,8 @@ function renderCards() {
       voteCount.textContent = card.votes || 0;
 
       voteBtn.addEventListener("click", () => {
-        if (state.phase === 'brainstorming') return;
+        // Permitir votos em qualquer momento se não estivermos mais usando fases restritivas
+        // if (state.phase === 'brainstorming') return;
         card.votes = (card.votes || 0) + 1;
         saveBoardToRetro();
         renderCards();
@@ -678,7 +679,7 @@ async function init() {
   if (!state.room) return showMissingMessage();
 
   state.isAdmin = !!(token && currentUser && state.room.creatorSessionId === currentUser.id);
-  state.phase = state.room.phase || 'brainstorming';
+  state.phase = state.room.phase || 'discussion';
   state.timerSeconds = state.room.timerSeconds || 600;
 
   document.getElementById("teamName").textContent = state.room.team.name;
