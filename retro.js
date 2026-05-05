@@ -155,28 +155,42 @@ function createBoard() {
 }
 
 function promptAddCard(columnId) {
-  const text = prompt("Digite o cartão:");
-  if (!text || !text.trim()) return;
-  
   const userId = currentUser ? currentUser.id : null;
   const card = {
     id: createId(),
-    text: text.trim(),
+    text: '',
     votes: 0,
     columnId: columnId,
     userId,
-    hidden: false
+    hidden: false,
+    isNew: true   // flag to auto-focus
   };
 
   if (!state.room.cards) state.room.cards = [];
   state.room.cards.push(card);
-  
-  saveBoardToRetro();
   renderCards();
+  // focus happens inside renderCards when isNew=true
 }
 
 function renderCards() {
   const columns = document.querySelectorAll(".retro-column");
+  let newCardToFocus = null;
+
+  // Preserve focus
+  const activeEl = document.activeElement;
+  let focusedCardId = null;
+  let focusedSelectionStart = null;
+  let focusedSelectionEnd = null;
+
+  if (activeEl && activeEl.classList.contains("card-text")) {
+    const item = activeEl.closest(".card-item");
+    if (item) {
+      focusedCardId = item.dataset.cardId;
+      focusedSelectionStart = activeEl.selectionStart;
+      focusedSelectionEnd = activeEl.selectionEnd;
+    }
+  }
+
   columns.forEach(col => {
     const list = col.querySelector(".cards-list");
     list.innerHTML = "";
@@ -197,17 +211,72 @@ function renderCards() {
       list.appendChild(empty);
     }
 
+    // --- Column drag-and-drop target ---
+    list.addEventListener('dragover', e => {
+      e.preventDefault();
+      const dragging = document.querySelector('.card-item.dragging');
+      if (!dragging) return;
+      const afterEl = getDragAfterElement(list, e.clientY);
+      if (afterEl) {
+        list.insertBefore(dragging, afterEl);
+      } else {
+        list.appendChild(dragging);
+      }
+    });
+
+    list.addEventListener('drop', e => {
+      e.preventDefault();
+      commitCardOrder();
+    });
+
     colCards.forEach(card => {
       const template = document.getElementById("cardTemplate");
       const item = template.content.firstElementChild.cloneNode(true);
       item.dataset.cardId = card.id;
+      item.dataset.columnId = colId;
       
       const textEl = item.querySelector(".card-text");
-      textEl.textContent = card.text;
       
       if (card.hidden && !state.isAdmin) {
         item.classList.add('hidden-content');
-        textEl.textContent = "Oculto durante escrita";
+        textEl.value = "Oculto durante escrita";
+        textEl.disabled = true;
+      } else {
+        textEl.value = card.text || '';
+        // Save on blur (click away)
+        textEl.addEventListener('blur', () => {
+          if (!document.body.contains(textEl)) return; // Prevent loop if removed by renderCards
+          const newText = textEl.value.trim();
+          if (newText !== card.text) {
+            card.text = newText;
+            delete card.isNew;
+            if (!newText) {
+              // Remove empty card on blur
+              state.room.cards = state.room.cards.filter(c => c.id !== card.id);
+              renderCards();
+            } else {
+              saveBoardToRetro();
+            }
+          } else {
+            delete card.isNew;
+            if (!newText) {
+              state.room.cards = state.room.cards.filter(c => c.id !== card.id);
+              renderCards();
+            }
+          }
+        });
+        // Save on Enter (without Shift)
+        textEl.addEventListener('keydown', e => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            textEl.blur();
+          }
+        });
+        // Auto-resize as user types
+        textEl.addEventListener('input', () => {
+          textEl.style.height = 'auto';
+          textEl.style.height = textEl.scrollHeight + 'px';
+        });
       }
 
       const voteBtn = item.querySelector(".vote-btn");
@@ -215,8 +284,6 @@ function renderCards() {
       voteCount.textContent = card.votes || 0;
 
       voteBtn.addEventListener("click", () => {
-        // Permitir votos em qualquer momento se não estivermos mais usando fases restritivas
-        // if (state.phase === 'brainstorming') return;
         card.votes = (card.votes || 0) + 1;
         saveBoardToRetro();
         renderCards();
@@ -233,18 +300,106 @@ function renderCards() {
         hideBtn.style.display = "none";
       }
 
+      // Delete button
+      const deleteBtn = item.querySelector(".btn-delete-card");
+      if (deleteBtn) {
+        const canDelete = state.isAdmin || (currentUser && card.userId === currentUser.id) || !card.userId;
+        if (canDelete) {
+          deleteBtn.addEventListener("click", () => {
+            if (confirm('Remover este cartão?')) {
+              state.room.cards = state.room.cards.filter(c => c.id !== card.id);
+              saveBoardToRetro();
+              renderCards();
+            }
+          });
+        } else {
+          deleteBtn.style.display = 'none';
+        }
+      }
+
       const avatar = item.querySelector(".author-avatar");
       if (card.userId) {
-        avatar.src = `https://ui-avatars.com/api/?name=${card.userId}&background=random`;
+        avatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(card.userId)}&background=random`;
       } else {
         avatar.style.display = "none";
       }
 
+      // Drag events
+      item.addEventListener('dragstart', e => {
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', card.id);
+      });
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+      });
+      // Prevent drag from firing when editing text
+      textEl.addEventListener('mousedown', e => e.stopPropagation());
+
       list.appendChild(item);
+
+      if (card.isNew && !focusedCardId) {
+        newCardToFocus = textEl;
+      }
     });
   });
 
   if (window.lucide) lucide.createIcons();
+
+  // Restore focus if a card was being edited
+  if (focusedCardId) {
+    const newActiveEl = document.querySelector(`.card-item[data-card-id="${focusedCardId}"] .card-text`);
+    if (newActiveEl) {
+      requestAnimationFrame(() => {
+        newActiveEl.focus();
+        try {
+          newActiveEl.setSelectionRange(focusedSelectionStart, focusedSelectionEnd);
+        } catch(e){}
+        newActiveEl.style.height = 'auto';
+        newActiveEl.style.height = newActiveEl.scrollHeight + 'px';
+      });
+    }
+  } else if (newCardToFocus) {
+    requestAnimationFrame(() => {
+      newCardToFocus.focus();
+      newCardToFocus.style.height = 'auto';
+      newCardToFocus.style.height = newCardToFocus.scrollHeight + 'px';
+    });
+  }
+}
+
+/** Returns the element after which the dragged card should be inserted */
+function getDragAfterElement(container, y) {
+  const draggableItems = [...container.querySelectorAll('.card-item:not(.dragging)')];
+  return draggableItems.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      return { offset, element: child };
+    }
+    return closest;
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+/** Reads the DOM order after a drag-drop and commits it to state */
+function commitCardOrder() {
+  const newOrder = [];
+  document.querySelectorAll('.retro-column').forEach(col => {
+    const colId = col.dataset.columnId;
+    col.querySelectorAll('.card-item').forEach(item => {
+      const id = item.dataset.cardId;
+      const existing = state.room.cards.find(c => c.id === id);
+      if (existing) {
+        newOrder.push({ ...existing, columnId: colId });
+      }
+    });
+  });
+  // Keep any cards not in DOM (shouldn't happen, but safe)
+  state.room.cards.forEach(c => {
+    if (!newOrder.find(n => n.id === c.id)) newOrder.push(c);
+  });
+  state.room.cards = newOrder;
+  saveBoardToRetro();
 }
 
 function renumberColumn(cardList) {
@@ -380,13 +535,15 @@ function setupHeaderAndShare() {
   if (shareUrlInput) shareUrlInput.value = window.location.href;
 }
 
-async function updatePhase(newPhase) {
+async function updatePhase(newPhase, isBroadcast = false) {
+  if (state.phase === newPhase && !isBroadcast) return; // Prevent unnecessary local updates
+  
   state.phase = newPhase;
   document.querySelectorAll('.phase-item').forEach(el => {
     el.classList.toggle('active', el.dataset.phase === newPhase);
   });
 
-  if (state.isAdmin) {
+  if (state.isAdmin && !isBroadcast) {
     try {
       await api(`/retros/${state.room.id}/phase`, {
         method: "PUT",
@@ -640,11 +797,51 @@ function setupWebSocket() {
       const data = JSON.parse(event.data);
       if (data.type === 'retro_updated' || data.type === 'board_update') {
         const payload = data.type === 'retro_updated' ? data.payload : data.data;
+        
+        // Preserve currently edited card
+        const activeEl = document.activeElement;
+        let editingCardId = null;
+        let editingCardText = null;
+        let editingCardIsNew = false;
+        let editingCardColId = null;
+        
+        if (activeEl && activeEl.classList.contains("card-text")) {
+          const item = activeEl.closest(".card-item");
+          if (item) {
+            editingCardId = item.dataset.cardId;
+            editingCardText = activeEl.value;
+            editingCardColId = item.closest(".retro-column").dataset.columnId;
+            const localCard = state.room.cards.find(c => c.id === editingCardId);
+            if (localCard && localCard.isNew) {
+              editingCardIsNew = true;
+            }
+          }
+        }
+
         state.room.columns = payload.columns;
         state.room.cards = payload.cards;
+        
+        // Merge preserved edit state into the new state
+        if (editingCardId) {
+          const serverCard = state.room.cards.find(c => c.id === editingCardId);
+          if (serverCard) {
+            serverCard.text = editingCardText;
+          } else if (editingCardIsNew) {
+            state.room.cards.push({
+              id: editingCardId,
+              text: editingCardText,
+              votes: 0,
+              columnId: editingCardColId,
+              userId: currentUser ? currentUser.id : null,
+              hidden: false,
+              isNew: true
+            });
+          }
+        }
+        
         renderCards();
       } else if (data.type === 'phase_updated') {
-        updatePhase(data.payload.phase);
+        updatePhase(data.payload.phase, true);
       } else if (data.type === 'timer_updated') {
         state.timerSeconds = data.payload.seconds;
         renderTimer();

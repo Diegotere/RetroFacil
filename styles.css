@@ -1606,13 +1606,80 @@ input:checked + .slider:before {
 .card-item {
   background: #fff;
   border-radius: var(--radius-xl);
-  padding: 1.25rem;
+  padding: 0.75rem 1rem 0.75rem 0.5rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   border-left: 4px solid transparent;
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  flex-direction: row;
+  gap: 0.5rem;
   position: relative;
+  transition: box-shadow 0.2s, opacity 0.2s;
+  cursor: default;
+}
+
+.card-item:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.card-item.dragging {
+  opacity: 0.45;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  cursor: grabbing;
+}
+
+.card-drag-handle {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 0.35rem;
+  color: var(--muted);
+  cursor: grab;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.card-item:hover .card-drag-handle {
+  opacity: 1;
+}
+
+.card-drag-handle i {
+  width: 16px;
+  height: 16px;
+}
+
+.card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.card-text {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  resize: none;
+  overflow: hidden;
+  line-height: 1.5;
+  min-height: 2.5rem;
+  padding: 0;
+  transition: background 0.15s;
+  border-radius: 4px;
+}
+
+.card-text:focus {
+  background: var(--slate-50);
+  outline: 1px solid var(--primary-light);
+  padding: 0.25rem 0.5rem;
+}
+
+.card-text:disabled {
+  cursor: default;
+  color: var(--muted);
 }
 
 .card-item.hidden-content .card-text {
@@ -1624,7 +1691,6 @@ input:checked + .slider:before {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 0.5rem;
 }
 
 .card-actions {
@@ -1644,6 +1710,11 @@ input:checked + .slider:before {
 .action-btn:hover {
   background: var(--slate-100);
   color: var(--slate-900);
+}
+
+.action-btn.btn-delete-card:hover {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .sidebar-footer {
